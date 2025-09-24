@@ -282,6 +282,7 @@ INSERT INTO advisor_groups (name, code) VALUES
 -- 特点：JSON字段存储灵活的配置和统计信息
 -- =====================================================
 DROP TABLE IF EXISTS `advisors`;
+
 CREATE TABLE `advisors`  (
   `id` SMALLINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
   `group_id` TINYINT NOT NULL COMMENT '所属组ID',
@@ -300,6 +301,14 @@ CREATE TABLE `advisors`  (
   INDEX `idx_status`(`status` ASC) USING BTREE
 --   CONSTRAINT `advisors_ibfk_1` FOREIGN KEY (`group_id`) REFERENCES `advisor_groups` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT
 ) ENGINE = InnoDB AUTO_INCREMENT = 4 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '顾问表' ROW_FORMAT = Dynamic;
+
+INSERT INTO advisors (group_id, name, employee_no, status) VALUES
+(1, '张三', 'EMP001', 1),
+(1, '李四', 'EMP002', 1),
+(2, '王五', 'EMP003', 1),
+(2, '赵六', 'EMP004', 1),
+(3, '孙七', 'EMP005', 1),
+(3, '周八', 'EMP006', 1);
 
 -- =====================================================
 -- 线索主表
@@ -396,6 +405,44 @@ CREATE TABLE `lead2_leads` (
     INDEX idx_status_combination (call_status_id, wechat_status_id, schedule_status_id)
 
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='线索主表-系统核心业务表（独立私域状态设计）';
+
+-- 第1-10条：直播线索
+('LEAD20240917001', 1, 2, 1, 1, '陈小明', '13800138001', 'chenxm@email.com', '阳光小陈', 'wx_chenxm01', 4, 6, 2, 1, 2, 1, 2, 2, 1, 0, 1, '2024-09-17 08:30:00'),
+('LEAD20240917002', 1, 2, 1, 2, '刘美丽', '13800138002', 'liuml@email.com', '美丽人生', 'wx_liuml02', 4, 6, 2, 1, 3, 1, 3, 2, 2, 0, 1, '2024-09-17 09:15:00'),
+('LEAD20240917003', 1, 3, 2, 3, '王大力', '13800138003', 'wangdl@email.com', '大力水手', 'wx_wangdl03', 3, NULL, 1, NULL, NULL, NULL, NULL, 1, 1, 2, 0, '2024-09-17 10:20:00'),
+('LEAD20240917004', 1, 2, 1, 1, '李小花', '13800138004', 'lixh@email.com', '花花世界', 'wx_lixh04', 4, 5, 2, 1, 2, 1, 2, 1, 1, 0, 0, '2024-09-17 11:45:00'),
+('LEAD20240917005', 1, 3, 2, 4, '张强', '13800138005', 'zhangq@email.com', '强哥在线', 'wx_zhangq05', 2, NULL, 1, NULL, NULL, NULL, NULL, 1, 1, 1, 0, '2024-09-17 13:10:00'),
+('LEAD20240917006', 1, 2, 3, 5, '赵敏', '13800138006', 'zhaomin@email.com', '敏敏特穆尔', 'wx_zhaomin06', 4, 6, 2, 1, 3, 1, 3, 2, 3, 0, 2, '2024-09-17 14:30:00'),
+('LEAD20240917007', 1, 3, 1, 2, '孙悟空', '13800138007', 'sunwk@email.com', '齐天大圣', 'wx_sunwk07', 1, NULL, 1, NULL, NULL, NULL, NULL, 1, 1, 0, 0, '2024-09-17 15:45:00'),
+('LEAD20240917008', 1, 2, 2, 3, '周杰伦', '13800138008', 'zhoujl@email.com', '周董', 'wx_zhoujl08', 4, 6, 2, 1, 2, 1, 2, 2, 2, 0, 1, '2024-09-17 16:20:00'),
+('LEAD20240917009', 1, 3, 3, 6, '林志玲', '13800138009', 'linzl@email.com', '志玲姐姐', 'wx_linzl09', 3, NULL, 1, NULL, NULL, NULL, NULL, 1, 1, 1, 0, '2024-09-17 17:15:00'),
+('LEAD20240917010', 1, 2, 1, 1, '马云', '13800138010', 'mayun@email.com', '风清扬', 'wx_mayun10', 4, 5, 2, 1, 3, 1, 3, 1, 1, 0, 0, '2024-09-17 18:30:00'),
+
+-- 第11-20条：短视频线索
+('LEAD20240918011', 2, NULL, 2, 4, '刘德华', '13800138011', 'liudh@email.com', '华仔', 'wx_liudh11', 4, 6, 2, 1, 2, 1, 2, 2, 4, 0, 3, '2024-09-18 08:45:00'),
+('LEAD20240918012', 2, NULL, 1, 2, '张学友', '13800138012', 'zhangxy@email.com', '歌神', 'wx_zhangxy12', 3, NULL, 1, NULL, NULL, NULL, NULL, 1, 1, 2, 0, '2024-09-18 09:30:00'),
+('LEAD20240918013', 2, NULL, 3, 5, '郭富城', '13800138013', 'guofc@email.com', '城城', 'wx_guofc13', 4, 5, 2, 1, 3, 1, 3, 2, 1, 0, 1, '2024-09-18 10:15:00'),
+('LEAD20240918014', 2, NULL, 2, 3, '黎明', '13800138014', 'liming@email.com', '黎天王', 'wx_liming14', 2, NULL, 1, NULL, NULL, NULL, NULL, 1, 1, 1, 0, '2024-09-18 11:20:00'),
+('LEAD20240918015', 2, NULL, 1, 1, '梁朝伟', '13800138015', 'liangcw@email.com', '伟仔', 'wx_liangcw15', 4, 6, 2, 1, 2, 1, 2, 2, 2, 0, 2, '2024-09-18 12:45:00'),
+('LEAD20240918016', 2, NULL, 3, 6, '周星驰', '13800138016', 'zhouxc@email.com', '星爷', 'wx_zhouxc16', 1, NULL, 1, NULL, NULL, NULL, NULL, 1, 1, 0, 0, '2024-09-18 13:30:00'),
+('LEAD20240918017', 2, NULL, 2, 4, '成龙', '13800138017', 'chenglong@email.com', '大哥', 'wx_chenglong17', 4, 5, 2, 1, 3, 1, 3, 1, 1, 0, 0, '2024-09-18 14:15:00'),
+('LEAD20240918018', 2, NULL, 1, 2, '李连杰', '13800138018', 'lilj@email.com', '李师傅', 'wx_lilj18', 3, NULL, 1, NULL, NULL, NULL, NULL, 1, 1, 3, 0, '2024-09-18 15:45:00'),
+('LEAD20240918019', 2, NULL, 3, 5, '甄子丹', '13800138019', 'zhenzd@email.com', '丹爷', 'wx_zhenzd19', 4, 6, 2, 1, 2, 1, 2, 2, 3, 0, 1, '2024-09-18 16:30:00'),
+('LEAD20240918020', 2, NULL, 2, 3, '吴京', '13800138020', 'wujing@email.com', '京哥', 'wx_wujing20', 4, 5, 2, 1, 3, 1, 3, 2, 2, 0, 2, '2024-09-18 17:20:00'),
+
+-- 第21-31条：公海线索
+('LEAD20240919021', 3, NULL, 1, 1, '范冰冰', '13800138021', 'fanbb@email.com', '冰冰', 'wx_fanbb21', 2, NULL, 1, NULL, NULL, NULL, NULL, 1, 1, 1, 0, '2024-09-19 08:20:00'),
+('LEAD20240919022', 3, NULL, 2, 4, '章子怡', '13800138022', 'zhangzy@email.com', '子怡', 'wx_zhangzy22', 4, 6, 2, 1, 2, 1, 2, 2, 1, 0, 1, '2024-09-19 09:45:00'),
+('LEAD20240919023', 3, NULL, 3, 6, '赵薇', '13800138023', 'zhaowei@email.com', '小燕子', 'wx_zhaowei23', 3, NULL, 1, NULL, NULL, NULL, NULL, 1, 1, 2, 0, '2024-09-19 10:30:00'),
+('LEAD20240919024', 3, NULL, 1, 2, '周迅', '13800138024', 'zhouxun@email.com', '迅哥', 'wx_zhouxun24', 4, 5, 2, 1, 3, 1, 3, 1, 1, 0, 0, '2024-09-19 11:15:00'),
+('LEAD20240919025', 3, NULL, 2, 3, '徐静蕾', '13800138025', 'xujl@email.com', '老徐', 'wx_xujl25', 1, NULL, 1, NULL, NULL, NULL, NULL, 1, 1, 0, 0, '2024-09-19 12:40:00'),
+('LEAD20240919026', 3, NULL, 3, 5, '舒淇', '13800138026', 'shuqi@email.com', '淇淇', 'wx_shuqi26', 4, 6, 2, 1, 2, 1, 2, 2, 4, 0, 3, '2024-09-19 13:25:00'),
+('LEAD20240919027', 3, NULL, 1, 1, '林心如', '13800138027', 'linxr@email.com', '紫薇', 'wx_linxr27', 4, 5, 2, 1, 3, 1, 3, 2, 2, 0, 1, '2024-09-19 14:50:00'),
+('LEAD20240919028', 3, NULL, 2, 4, '杨幂', '13800138028', 'yangmi@email.com', '大幂幂', 'wx_yangmi28', 3, NULL, 1, NULL, NULL, NULL, NULL, 1, 1, 1, 0, '2024-09-19 15:35:00'),
+('LEAD20240919029', 3, NULL, 3, 6, '刘诗诗', '13800138029', 'liuss@email.com', '诗诗', 'wx_liuss29', 4, 6, 2, 1, 2, 1, 2, 2, 3, 0, 2, '2024-09-19 16:20:00'),
+('LEAD20240919030', 3, NULL, 1, 2, '唐嫣', '13800138030', 'tangyan@email.com', '糖糖', 'wx_tangyan30', 2, NULL, 1, NULL, NULL, NULL, NULL, 1, 1, 1, 0, '2024-09-19 17:10:00'),
+('LEAD20240919031', 3, NULL, 2, 3, '高圆圆', '13800138031', 'gaoyy@email.com', '圆圆', 'wx_gaoyy31', 4, 5, 2, 1, 3, 1, 3, 1, 1, 0, 0, '2024-09-19 18:45:00');
+
 -- =====================================================
 -- 通话记录表
 -- 用途：记录所有通话信息，包括录音、状态转换、对话内容等
