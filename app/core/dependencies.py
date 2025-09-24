@@ -7,6 +7,7 @@ import asyncio
 from app.core.event_bus import ProductionEventBus, create_event_bus
 from app.core.config import settings
 from app.core.logger import get_logger
+from app.services.lead_service import LeadService
 from app.services.upload_record_service import FileService
 from app.db.database import Database
 
@@ -61,6 +62,8 @@ class EnhancedServiceContainer:
         self._services['db_service'] = Database()
         
         self._services['file_service'] = FileService(self._event_bus)
+
+        self._services['lead_service'] = LeadService(self._event_bus, self._services['db_service'])
 
         for name, service in self._services.items():
             if hasattr(service, 'initialize'):
@@ -163,9 +166,17 @@ service_container = EnhancedServiceContainer()
 #         )
 
 # === 批量获取服务 ===
+def get_database() -> Database:
+    """获取数据库服务"""
+    return service_container.get_service("db_service")
+
 def get_file_service() -> FileService:
     """获取文件服务"""
     return service_container.get_service("file_service")
+
+def get_lead_service() -> LeadService:
+    """获取线索服务"""
+    return service_container.get_service("lead_service")
 
 def get_all_services() -> Dict[str, Any]:
     """获取所有服务"""
