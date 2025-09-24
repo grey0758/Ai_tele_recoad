@@ -16,6 +16,12 @@ from app.schemas.lead import (
     LeadListResponse, 
     LeadQueryParams
 )
+from app.schemas.base import (
+    ResponseData, 
+    ResponseBuilder, 
+    ResponseCode,
+    PaginatedResponse
+)
 from app.core.dependencies import get_lead_service
 from app.core.logger import get_logger
 

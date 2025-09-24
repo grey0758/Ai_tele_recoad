@@ -9,6 +9,7 @@ from app.core.config import settings
 from app.core.logger import get_logger
 from app.services.lead_service import LeadService
 from app.services.upload_record_service import FileService
+from app.services.aiBox_service import AiBoxService
 from app.db.database import Database
 
 logger = get_logger(__name__)
@@ -64,6 +65,8 @@ class EnhancedServiceContainer:
         self._services['file_service'] = FileService(self._event_bus)
 
         self._services['lead_service'] = LeadService(self._event_bus, self._services['db_service'])
+
+        self._services['aibox_service'] = AiBoxService(self._event_bus, self._services['db_service'])
 
         for name, service in self._services.items():
             if hasattr(service, 'initialize'):
@@ -177,6 +180,10 @@ def get_file_service() -> FileService:
 def get_lead_service() -> LeadService:
     """获取线索服务"""
     return service_container.get_service("lead_service")
+
+def get_aibox_service() -> AiBoxService:
+    """获取aiBox服务"""
+    return service_container.get_service("aibox_service")
 
 def get_all_services() -> Dict[str, Any]:
     """获取所有服务"""
