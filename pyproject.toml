@@ -36,6 +36,7 @@ dependencies = [
     "requests",
     "rich",
     "aiofiles",
+    "aiomysql>=0.2.0",
 ]
 
 [project.optional-dependencies]
@@ -80,5 +81,6 @@ addopts = "-v --tb=short"
 
 [dependency-groups]
 dev = [
+    "black>=25.1.0",
     "pytest-asyncio>=1.1.0",
 ]
