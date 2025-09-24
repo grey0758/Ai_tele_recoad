@@ -37,6 +37,8 @@ dependencies = [
     "rich",
     "aiofiles",
     "aiomysql>=0.2.0",
+    "mypy>=1.18.2",
+    "types-aiofiles>=24.1.0.20250822",
 ]
 
 [project.optional-dependencies]
