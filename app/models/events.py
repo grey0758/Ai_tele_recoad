@@ -65,17 +65,18 @@ class Event(BaseModel):
 
 class EventMetrics(BaseModel):
     """事件指标"""
+    
     model_config = ConfigDict(arbitrary_types_allowed=True)
-    total_events: Annotated[int, Field(default=0,description="总事件数")]   
-    completed_events: Annotated[int, Field(default=0,description="完成事件数")]
-    failed_events: Annotated[int, Field(default=0,description="失败事件数")]
-    timeout_events: Annotated[int, Field(default=0,description="超时事件数")]
-    cancelled_events: Annotated[int, Field(default=0,description="取消事件数")]
-    average_processing_time: Annotated[float, Field(default=0.0,description="平均处理时间")]    
-    events_per_second: Annotated[float, Field(default=0.0,description="每秒事件数")]
-    queue_size: Annotated[int, Field(default=0,description="队列大小")]
-    active_workers: Annotated[int, Field(default=0,description="活跃工作线程数")]
-    dead_letter_queue_size: Annotated[int, Field(default=0,description="死信队列大小")]
+    total_events: Annotated[int, Field(default_factory=lambda: 0,description="总事件数")]   
+    completed_events: Annotated[int, Field(default_factory=lambda: 0,description="完成事件数")]
+    failed_events: Annotated[int, Field(default_factory=lambda: 0,description="失败事件数")]
+    timeout_events: Annotated[int, Field(default_factory=lambda: 0,description="超时事件数")]
+    cancelled_events: Annotated[int, Field(default_factory=lambda: 0,description="取消事件数")]
+    average_processing_time: Annotated[float, Field(default_factory=lambda: 0.0,description="平均处理时间")]    
+    events_per_second: Annotated[float, Field(default_factory=lambda: 0.0,description="每秒事件数")]
+    queue_size: Annotated[int, Field(default_factory=lambda: 0,description="队列大小")]
+    active_workers: Annotated[int, Field(default_factory=lambda: 0,description="活跃工作线程数")]
+    dead_letter_queue_size: Annotated[int, Field(default_factory=lambda: 0,description="死信队列大小")]
     last_updated: Annotated[datetime, Field(default_factory=datetime.now,description="最后更新时间")]
     
 

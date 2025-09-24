@@ -1,4 +1,5 @@
 # app/core/dependencies.py
+from datetime import datetime
 from typing import Optional, Dict, Any
 from fastapi import HTTPException, status
 import asyncio
@@ -14,8 +15,8 @@ logger = get_logger(__name__)
 class EnhancedServiceContainer:
     """增强的服务容器 - 支持事件总线和生命周期管理"""
     
-    def __init__(self) :
-        self._services = {}
+    def __init__(self) -> None:
+        self._services: Dict[str, Any] = {}
         self._event_bus: Optional[ProductionEventBus] = None
         self._initialized = False
         self._lock = asyncio.Lock()
@@ -139,7 +140,7 @@ class EnhancedServiceContainer:
     @property
     def is_event_bus_running(self) -> bool:
         """检查事件总线是否运行中"""
-        return self._initialized and self._event_bus and self._event_bus.running
+        return bool(self._initialized and self._event_bus and self._event_bus.running)
 
 # 全局服务容器
 service_container = EnhancedServiceContainer()
@@ -182,7 +183,11 @@ async def check_services_health() -> Dict[str, Any]:
     if not service_container.is_initialized:
         return {"status": "not_initialized", "services": {}}
     
-    health_status = {"status": "healthy", "services": {}}
+    health_status: Dict[str, Any] = {
+    "status": "healthy",
+    "timestamp": datetime.now().isoformat(),
+    "services": {}
+    }
     
     # 检查事件总线
     try:

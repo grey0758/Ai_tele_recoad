@@ -1,4 +1,10 @@
 # -*- coding: utf-8 -*-
+"""
+文件上传系统主模块
+
+这是一个基于 FastAPI 的文件上传系统，支持文件上传和下载功能。
+提供了完整的生命周期管理、健康检查和静态文件服务。
+"""
 from contextlib import asynccontextmanager
 import uvicorn
 from fastapi import FastAPI
@@ -9,31 +15,27 @@ from app.api.v1.api import api_router
 from app.core.dependencies import service_container, check_services_health
 from app.middleware.logging import logging_middleware
 
-# 全局处理器存储
-app_processors = {}
-
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(_app: FastAPI):
     """应用生命周期管理"""
     print("🚀 Starting application")
-    
+
     try:
         # 初始化服务容器（包含事件总线和所有服务）
         await service_container.initialize()
         print("✅ All services initialized")
-        
+
     except Exception as e:
         print(f"❌ Startup failed: {e}")
         await service_container.shutdown()
         raise
-    
+
     yield
-    
+
     # 关闭阶段
     print("🛑 Shutting down application")
     await service_container.shutdown()
     print("👋 Application shutdown completed")
-
 
 
 # 创建FastAPI应用
@@ -41,11 +43,11 @@ app = FastAPI(
     title="文件上传系统",
     description="文件上传系统，支持文件上传和下载",
     version="1.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
 )
 
 # 注册请求/响应日志中间件
-app.middleware('http')(logging_middleware)
+app.middleware("http")(logging_middleware)
 
 # 添加CORS中间件
 app.add_middleware(
@@ -62,19 +64,22 @@ app.include_router(api_router, prefix="/api/v1")
 # 添加静态文件服务
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
+
 @app.get("/")
 async def root():
     """根路径"""
     return {
         "message": "record upload system running",
         "version": "1.0.0",
-        "docs": "/docs"
+        "docs": "/docs",
     }
+
 
 @app.get("/health")
 async def health_check():
     """健康检查"""
     return await check_services_health()
+
 
 if __name__ == "__main__":
     uvicorn.run(

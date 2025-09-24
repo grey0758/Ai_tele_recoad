@@ -4,18 +4,26 @@ import time
 from collections import defaultdict, deque
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Deque, Dict, List, Optional
+import aiofiles
 
 from app.core.config import settings
 from app.core.logger import get_logger
-from app.models.events import Event, EventType, EventPriority, EventStatus, EventMetrics, EventListener
+from app.models.events import (
+    Event,
+    EventType,
+    EventPriority,
+    EventStatus,
+    EventMetrics,
+    EventListener,
+)
 
 logger = get_logger(__name__)
 
 class ProductionEventBus:
     """生产级事件总线"""
     
-    def __init__(self, config=None):
+    def __init__(self, config: Optional[Any] = None) -> None:
         # 使用传入的配置或默认配置
         self.config = config or settings
         
@@ -23,20 +31,31 @@ class ProductionEventBus:
         self.listeners: Dict[EventType, List[EventListener]] = defaultdict(list)
         self.pending_events: Dict[str, Event] = {}
         self.event_queues: List[asyncio.Queue] = []
-        self.dead_letter_queue: deque = deque(maxlen=self.config.dead_letter_queue_size)
+        self.dead_letter_queue: Deque[Event] = deque(maxlen=self.config.dead_letter_queue_size)
         
         # 状态管理
         self.running = False
         self.workers: List[asyncio.Task] = []
         self.health_check_task: Optional[asyncio.Task] = None
         self.metrics_task: Optional[asyncio.Task] = None
-        
+
         # 指标和监控
-        self.metrics = EventMetrics()
-        self.event_history: deque = deque(maxlen=1000)
-        self.processing_times: deque = deque(maxlen=100)
-        self.events_per_second_counter = deque(maxlen=60)
-        
+        self.metrics: EventMetrics = EventMetrics(
+            total_events=0,
+            completed_events=0,
+            failed_events=0,
+            timeout_events=0,
+            cancelled_events=0,
+            average_processing_time=0.0,
+            events_per_second=0.0,
+            queue_size=0,
+            active_workers=0,
+            dead_letter_queue_size=0,
+            last_updated=datetime.now()
+        )
+        self.event_history: Deque[Event] = deque(maxlen=1000)
+        self.processing_times: Deque[float] = deque(maxlen=100)
+        self.events_per_second_counter: Deque[int] = deque(maxlen=60)
         # 线程安全
         self.lock = asyncio.Lock()
         self.metrics_lock = asyncio.Lock()
@@ -47,7 +66,7 @@ class ProductionEventBus:
         
         # 初始化队列（按优先级）
         for _ in EventPriority:
-            queue = asyncio.Queue(maxsize=self.config.max_queue_size)
+            queue: asyncio.Queue[Event] = asyncio.Queue(maxsize=self.config.max_queue_size)
             self.event_queues.append(queue)
         
         logger.info(
@@ -181,6 +200,8 @@ class ProductionEventBus:
         # 如果需要等待结果
         if event.wait_for_result:
             try:
+                if event.result_future is None:
+                    raise RuntimeError("Event result_future 未初始化")
                 result = await asyncio.wait_for(
                     event.result_future, 
                     timeout=event.timeout
@@ -405,8 +426,8 @@ class ProductionEventBus:
             self.metrics.dead_letter_queue_size = len(self.dead_letter_queue)
             
             self.metrics.last_updated = datetime.now()
-    
-    async def _log_event(self, event: Event, action: str, worker_id: str = None, error: str = None):
+
+    async def _log_event(self, event: Event, action: str, worker_id: Optional[str] = None, error: Optional[str] = None):
         """记录事件日志"""
         log_data = {
             "event_id": event.event_id,
@@ -423,7 +444,7 @@ class ProductionEventBus:
         }
         
         # 添加到历史记录
-        self.event_history.append(log_data)
+        self.event_history.append(event)
         
         # 持久化日志
         if self.persistence_enabled:
@@ -433,8 +454,6 @@ class ProductionEventBus:
         """持久化日志到文件"""
         try:
             log_file = self.persistence_path / f"events_{datetime.now().strftime('%Y%m%d')}.log"
-            # 使用aiofiles进行异步文件写入
-            import aiofiles
             async with aiofiles.open(log_file, 'a', encoding='utf-8') as f:
                 await f.write(json.dumps(log_data) + '\n')
         except Exception as e:
@@ -486,8 +505,6 @@ class ProductionEventBus:
     async def _metrics_worker(self):
         """指标收集工作线程"""
         logger.info("Metrics worker started")
-        
-        last_event_count = 0
         
         while self.running:
             try:
@@ -545,7 +562,7 @@ class ProductionEventBus:
         health_score = 100
         if metrics.total_events > 0:
             failure_rate = (metrics.failed_events + metrics.timeout_events) / metrics.total_events
-            health_score = max(0, 100 - (failure_rate * 100))
+            health_score = int(max(0, 100 - (failure_rate * 100)))
         
         return {
             "status": "healthy" if self.running and health_score > 80 else "degraded" if self.running else "stopped",
@@ -578,18 +595,19 @@ class ProductionEventBus:
     
     async def get_event_history(self, limit: int = 100) -> List[Dict[str, Any]]:
         """获取事件历史"""
-        return list(self.event_history)[-limit:]
-    
+        events = list(self.event_history)[-limit:]
+        return [event.model_dump() for event in events]
+
     async def get_dead_letter_events(self, limit: int = 100) -> List[Dict[str, Any]]:
         """获取死信队列事件"""
         events = list(self.dead_letter_queue)[-limit:]
-        return [event.to_dict() for event in events]
+        return [event.model_dump() for event in events]
     
     async def get_listeners_info(self) -> Dict[str, List[Dict[str, Any]]]:
         """获取监听器信息"""
         result = {}
         for event_type, listeners in self.listeners.items():
-            result[event_type.value] = [listener.to_dict() for listener in listeners]
+            result[event_type.value] = [listener.model_dump() for listener in listeners]
         return result
     
     async def clear_dead_letter_queue(self):

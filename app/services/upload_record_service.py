@@ -1,4 +1,3 @@
-import shutil
 from pathlib import Path 
 from app.core.config import settings
 from app.core.logger import get_logger
@@ -25,6 +24,8 @@ class FileService(BaseService):
         try:
             logger.info(f"Uploading file: {event.data}")
 
+            if not isinstance(event.data, FileUploadRequest):
+                raise TypeError("event.data 不是 FileUploadRequest 类型")
             request_data: FileUploadRequest = event.data
 
             # 确保上传目录存在
