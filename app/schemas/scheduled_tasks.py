@@ -48,6 +48,7 @@ class ScheduledTaskResponse(ScheduledTaskBase):
     updated_at: datetime = Field(..., description="更新时间")
 
     class Config:
+        """配置模型行为"""
         from_attributes = True
 
 
