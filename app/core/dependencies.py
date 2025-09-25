@@ -10,6 +10,7 @@ from app.core.logger import get_logger
 from app.services.lead_service import LeadService
 from app.services.upload_record_service import FileService
 from app.services.aiBox_service import AiBoxService
+from app.services.scheduled_tasks_service import ScheduledTasksService
 from app.db.database import Database
 
 logger = get_logger(__name__)
@@ -67,6 +68,8 @@ class EnhancedServiceContainer:
         self._services['lead_service'] = LeadService(self._event_bus, self._services['db_service'])
 
         self._services['aibox_service'] = AiBoxService(self._event_bus, self._services['db_service'])
+
+        self._services['scheduled_tasks_service'] = ScheduledTasksService(self._event_bus, self._services['db_service'])
 
         for name, service in self._services.items():
             if hasattr(service, 'initialize'):
@@ -184,6 +187,10 @@ def get_lead_service() -> LeadService:
 def get_aibox_service() -> AiBoxService:
     """获取aiBox服务"""
     return service_container.get_service("aibox_service")
+
+def get_scheduled_tasks_service() -> ScheduledTasksService:
+    """获取定时任务服务"""
+    return service_container.get_service("scheduled_tasks_service")
 
 def get_all_services() -> Dict[str, Any]:
     """获取所有服务"""
