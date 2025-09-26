@@ -30,6 +30,8 @@ dependencies = [
     "websocket-client",
     # 任务队列
     "redis",
+    # 定时任务调度
+    "apscheduler>=3.10.0",
     # 依赖注入
     # 通用工具
     "numpy",
@@ -86,3 +88,8 @@ dev = [
     "black>=25.1.0",
     "pytest-asyncio>=1.1.0",
 ]
+
+[tool.mypy]
+[[tool.mypy.overrides]]
+module = "apscheduler.*"
+ignore_missing_imports = true
