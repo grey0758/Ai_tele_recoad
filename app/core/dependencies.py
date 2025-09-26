@@ -11,7 +11,7 @@ from app.core.config import settings
 from app.core.logger import get_logger
 from app.services.lead_service import LeadService
 from app.services.upload_record_service import FileService
-from app.services.aiBox_service import AiBoxService
+from app.services.aibox_service import Aiboxservice
 from app.services.scheduled_tasks_service import ScheduledTasksService
 from app.services.scheduler_service import SchedulerService
 from app.db.database import Database
@@ -75,7 +75,7 @@ class EnhancedServiceContainer:
             self._event_bus, self._services["db_service"]
         )
 
-        self._services["aibox_service"] = AiBoxService(
+        self._services["aibox_service"] = Aiboxservice(
             self._event_bus, self._services["db_service"]
         )
 
@@ -207,7 +207,7 @@ def get_lead_service() -> LeadService:
     return service_container.get_service("lead_service")
 
 
-def get_aibox_service() -> AiBoxService:
+def get_aibox_service() -> Aiboxservice:
     """获取aiBox服务"""
     return service_container.get_service("aibox_service")
 

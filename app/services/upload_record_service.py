@@ -1,4 +1,7 @@
-from pathlib import Path 
+"""
+文件服务类 - 处理实际的文件上传逻辑
+"""
+from pathlib import Path
 from app.core.config import settings
 from app.core.logger import get_logger
 from app.schemas.base import BaseResponse
@@ -9,8 +12,10 @@ from app.models.events import EventType, Event
 
 logger = get_logger(__name__)
 
+
 class FileService(BaseService):
     """文件服务类 - 处理实际的文件上传逻辑"""
+
     def __init__(self, event_bus: ProductionEventBus):
         super().__init__(event_bus=event_bus, service_name="FileService")
 
@@ -18,11 +23,13 @@ class FileService(BaseService):
         return True
 
     async def register_event_listeners(self):
+        """注册事件监听器"""
         await self._register_listener(EventType.FILE_UPLOAD_RECORD, self.upload_file)
-    
+
     async def upload_file(self, event: Event) -> BaseResponse:
+        """上传文件"""
         try:
-            logger.info(f"Uploading file: {event.data}")
+            logger.info("Uploading file: %s", event.data)
 
             if not isinstance(event.data, FileUploadRequest):
                 raise TypeError("event.data 不是 FileUploadRequest 类型")
@@ -41,12 +48,15 @@ class FileService(BaseService):
             with open(file_path, "wb") as buffer:
                 buffer.write(file_content)
 
-
             # 返回响应
             file_url = f"/uploads/{filename}"
-            response_data = FileUploadResponse(file_url=f"http://localhost:8022{file_url}")
-            return BaseResponse.success(response_data)
-            
-        except Exception as e:
-            logger.error(f"Failed to upload file: {e}")
-            return BaseResponse.error(code=500, msg=f"Failed to upload file: {e}")
+            response_data = FileUploadResponse(
+                file_url=f"http://localhost:8022{file_url}"
+            )
+            return BaseResponse(data=response_data, code=200, message="上传成功")
+
+        except Exception as e:  # pylint: disable=broad-except
+            logger.error("Failed to upload file: %s", str(e))
+            return BaseResponse(
+                data=None, code=500, message=f"Failed to upload file: {str(e)}"
+            )

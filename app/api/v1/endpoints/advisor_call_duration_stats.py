@@ -8,7 +8,7 @@ from typing import List
 from datetime import date
 from fastapi import APIRouter, Depends, Query, Path
 
-from app.services.aiBox_service import AiBoxService
+from app.services.aibox_service import Aiboxservice
 from app.schemas.advisor_call_duration_stats import (
     AdvisorCallDurationStatsUpsertRequest,
     AdvisorCallDurationStatsResponse,
@@ -30,7 +30,7 @@ router = APIRouter()
 )
 async def upsert_advisor_call_duration_stats(
     stats_data: AdvisorCallDurationStatsUpsertRequest,
-    aibox_service: AiBoxService = Depends(get_aibox_service),
+    aibox_service: Aiboxservice = Depends(get_aibox_service),
 ):
     """
     更新或插入顾问通话时长统计
@@ -57,7 +57,7 @@ async def upsert_advisor_call_duration_stats(
 async def get_advisor_call_duration_stats(
     advisor_id: int = Path(..., description="顾问ID"),
     stats_date: date = Path(..., description="统计日期"),
-    aibox_service: AiBoxService = Depends(get_aibox_service),
+    aibox_service: Aiboxservice = Depends(get_aibox_service),
 ):
     """
     根据顾问ID和统计日期获取通话时长统计
@@ -88,7 +88,7 @@ async def get_advisor_call_duration_stats_range(
     advisor_id: int = Path(..., description="顾问ID"),
     start_date: date = Query(..., description="开始日期"),
     end_date: date = Query(..., description="结束日期"),
-    aibox_service: AiBoxService = Depends(get_aibox_service),
+    aibox_service: Aiboxservice = Depends(get_aibox_service),
 ):
     """
     根据顾问ID和日期范围获取通话时长统计列表
@@ -119,7 +119,7 @@ async def get_all_advisor_call_duration_stats_by_date(
     stats_date: date = Query(
         default_factory=date.today, description="统计日期（默认今天）"
     ),
-    aibox_service: AiBoxService = Depends(get_aibox_service),
+    aibox_service: Aiboxservice = Depends(get_aibox_service),
 ):
     """
     获取指定日期的所有顾问通话时长统计
@@ -148,7 +148,7 @@ async def get_all_advisor_call_duration_stats_by_date(
     summary="手动触发顾问时长统计微信播报任务",
 )
 async def trigger_advisor_stats_wechat_report(
-    aibox_service: AiBoxService = Depends(get_aibox_service),
+    aibox_service: Aiboxservice = Depends(get_aibox_service),
 ):
     """
     手动触发顾问时长统计微信播报任务

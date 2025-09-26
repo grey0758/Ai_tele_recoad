@@ -19,7 +19,7 @@ from apscheduler.jobstores.base import JobLookupError
 from app.models.events import EventType
 from app.core.event_bus import ProductionEventBus
 from app.db.database import Database
-from app.services.aiBox_service import AiBoxService
+from app.services.aibox_service import Aiboxservice
 from app.services.base_service import BaseService
 from app.services.scheduled_tasks_service import ScheduledTasksService
 from app.core.logger import get_logger
@@ -30,7 +30,13 @@ logger = get_logger(__name__)
 class SchedulerService(BaseService):
     """调度器服务类"""
 
-    def __init__(self, event_bus: ProductionEventBus, database: Database, scheduled_tasks_service: ScheduledTasksService, aibox_service: AiBoxService):
+    def __init__(
+        self,
+        event_bus: ProductionEventBus,
+        database: Database,
+        scheduled_tasks_service: ScheduledTasksService,
+        aibox_service: Aiboxservice,
+    ):
         super().__init__(event_bus=event_bus, service_name="SchedulerService")
         self.database = database
         self.scheduler: Optional[BackgroundScheduler] = None
@@ -55,7 +61,7 @@ class SchedulerService(BaseService):
                 self._job_listener,
                 EVENT_JOB_EXECUTED | EVENT_JOB_ERROR | EVENT_JOB_MISSED,
             )
-            
+
             # 启动调度器
             await self.start_scheduler()
 
@@ -197,7 +203,11 @@ class SchedulerService(BaseService):
             tasks = await self.scheduled_tasks_service.get_all_scheduled_tasks()
 
             for task in tasks:
-                if task.is_active and task.cron_expression and task.task_type == "data_sync_service":
+                if (
+                    task.is_active
+                    and task.cron_expression
+                    and task.task_type == "data_sync_service"
+                ):
                     try:
                         # 解析cron表达式
                         trigger = CronTrigger.from_crontab(task.cron_expression)
@@ -231,7 +241,9 @@ class SchedulerService(BaseService):
                 self.job_status[job_id]["run_count"] += 1
 
             try:
-                asyncio.run(self.emit_event(EventType.SEND_ADVISOR_STATS_WECHAT_REPORT_TASK))
+                asyncio.run(
+                    self.emit_event(EventType.SEND_ADVISOR_STATS_WECHAT_REPORT_TASK)
+                )
             finally:
                 pass
 
