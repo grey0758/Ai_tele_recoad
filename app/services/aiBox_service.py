@@ -299,7 +299,7 @@ class AiBoxService(BaseService):
         if stats_list:
             # 这里需要配置实际的微信ID和授权令牌
             # 建议从配置文件或环境变量中读取
-            target_wxid = "50251377407@chatroom"
+            target_wxid = settings.wechat_default_wxid
             auth_token = settings.wechat_bot_token
             # 修复类型问题，确保 target_wxid 和 auth_token 都为 str 类型
             if target_wxid is None or auth_token is None:
