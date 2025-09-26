@@ -130,6 +130,22 @@ class AiBoxService(BaseService):
                 logger.error("根据日期范围获取顾问通话时长统计失败: %s", e)
                 return []
 
+    async def get_all_advisor_stats_by_date(
+        self, stats_date: date
+    ) -> list[AdvisorCallDurationStats]:
+        """获取指定日期的所有顾问通话时长统计"""
+        async with self.database.get_session() as db_session:
+            try:
+                result = await db_session.execute(
+                    select(AdvisorCallDurationStats)
+                    .where(AdvisorCallDurationStats.stats_date == stats_date)
+                    .order_by(AdvisorCallDurationStats.advisor_id.asc())
+                )
+                return list(result.scalars().all())
+            except Exception as e:
+                logger.error("获取指定日期所有顾问通话时长统计失败: %s", e)
+                return []
+
     async def _get_stats_by_advisor_and_date(
         self, db_session: AsyncSession, advisor_id: int, stats_date: date
     ) -> Optional[AdvisorCallDurationStats]:
