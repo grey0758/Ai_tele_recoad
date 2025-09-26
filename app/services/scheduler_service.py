@@ -5,7 +5,7 @@
 提供定时任务管理、执行监控和状态管理功能
 """
 
-import threading
+import asyncio
 from datetime import datetime
 from typing import Optional, Dict, Any
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -16,7 +16,7 @@ from apscheduler.events import (
     EVENT_JOB_MISSED,
 )
 from apscheduler.jobstores.base import JobLookupError
-
+from app.models.events import EventType
 from app.core.event_bus import ProductionEventBus
 from app.db.database import Database
 from app.services.aiBox_service import AiBoxService
@@ -30,13 +30,13 @@ logger = get_logger(__name__)
 class SchedulerService(BaseService):
     """调度器服务类"""
 
-    def __init__(self, event_bus: ProductionEventBus, database: Database, scheduled_tasks_service: ScheduledTasksService, aiBox_service: AiBoxService):
+    def __init__(self, event_bus: ProductionEventBus, database: Database, scheduled_tasks_service: ScheduledTasksService, aibox_service: AiBoxService):
         super().__init__(event_bus=event_bus, service_name="SchedulerService")
         self.database = database
         self.scheduler: Optional[BackgroundScheduler] = None
         self.scheduler_running = False
         self.scheduled_tasks_service = scheduled_tasks_service
-        self.aiBox_service = aiBox_service
+        self.aibox_service = aibox_service
         # 任务执行状态
         self.job_status: Dict[str, Dict[str, Any]] = {}
 
@@ -55,6 +55,9 @@ class SchedulerService(BaseService):
                 self._job_listener,
                 EVENT_JOB_EXECUTED | EVENT_JOB_ERROR | EVENT_JOB_MISSED,
             )
+            
+            # 启动调度器
+            await self.start_scheduler()
 
             logger.info("调度器服务初始化成功")
             return True
@@ -218,50 +221,29 @@ class SchedulerService(BaseService):
 
     def _execute_advisor_stats_task(self, task_id: int, task_name: str):
         """执行顾问统计数据任务"""
+        try:
+            logger.info("开始执行定时任务: %s (ID: %s)", task_name, task_id)
 
-        def execute_in_thread():
+            # 更新任务状态
+            job_id = f"task_{task_id}"
+            if job_id in self.job_status:
+                self.job_status[job_id]["last_run"] = datetime.now()
+                self.job_status[job_id]["run_count"] += 1
+
             try:
-                logger.info("开始执行定时任务: %s (ID: %s)", task_name, task_id)
-
-                # 更新任务状态
-                job_id = f"task_{task_id}"
-                if job_id in self.job_status:
-                    self.job_status[job_id]["last_run"] = datetime.now()
-                    self.job_status[job_id]["run_count"] += 1
-
-                self.aiBox_service.get_advisor_stats(task_id, task_name)
-
-                logger.info("定时任务 %s 执行完成", task_name)
-
-            except Exception as e:  # pylint: disable=broad-except
-                logger.error("执行定时任务 %s 失败: %s", task_name, str(e))
-
-                # 更新错误计数
-                job_id = f"task_{task_id}"
-                if job_id in self.job_status:
-                    self.job_status[job_id]["error_count"] += 1
-
-        # 在新线程中执行，避免阻塞调度器
-        threading.Thread(target=execute_in_thread, daemon=True).start()
-
-    def _do_advisor_stats_work(self, task_id: int, task_name: str):  # pylint: disable=unused-argument
-        """执行顾问统计相关的工作"""
-        # 这里实现具体的业务逻辑
-        # 例如：
-        # 1. 获取顾问统计数据
-        # 2. 处理数据
-        # 3. 发送数据到外部系统
-        # 4. 记录执行日志
-
-        logger.info("执行顾问统计工作: %s", task_name)
-
-        # 记录执行日志到数据库
-        if self.scheduled_tasks_service:
-            try:
-                # 这里可以创建执行日志记录
+                asyncio.run(self.emit_event(EventType.SEND_ADVISOR_STATS_WECHAT_REPORT_TASK))
+            finally:
                 pass
-            except Exception as e:  # pylint: disable=broad-except
-                logger.error("记录执行日志失败: %s", str(e))
+
+            logger.info("定时任务 %s 执行完成", task_name)
+
+        except Exception as e:  # pylint: disable=broad-except
+            logger.error("执行定时任务 %s 失败: %s", task_name, str(e))
+
+            # 更新错误计数
+            job_id = f"task_{task_id}"
+            if job_id in self.job_status:
+                self.job_status[job_id]["error_count"] += 1
 
     def _job_listener(self, event):
         """任务执行监听器"""

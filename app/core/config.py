@@ -33,6 +33,11 @@ class Settings(BaseSettings):
     openai_url: Optional[str] = Field(default=None, description="OpenAI URL")
     openai_api_key: Optional[str] = Field(default=None, description="OpenAI API key")
     
+    # WeChat Bot Configuration
+    wechat_bot_url: str = Field(default="https://wxbot.da-mai.com/api/v1/wxbot/user/send", description="WeChat bot API URL")
+    wechat_bot_token: Optional[str] = Field(default="damai2025wxbot", description="WeChat bot authorization token")
+    wechat_default_wxid: Optional[str] = Field(default="58065692621@chatroom", description="Default WeChat ID for notifications")
+    
     # CORS
     allowed_origins: List[str] = Field(default=["http://localhost:3000"], description="Allowed CORS origins")
     

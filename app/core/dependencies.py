@@ -84,7 +84,7 @@ class EnhancedServiceContainer:
         )
 
         self._services["scheduler_service"] = SchedulerService(
-            self._event_bus, self._services["db_service"], self._services["scheduled_tasks_service"]
+            self._event_bus, self._services["db_service"], self._services["scheduled_tasks_service"], self._services["aibox_service"]
         )
 
         for name, service in self._services.items():

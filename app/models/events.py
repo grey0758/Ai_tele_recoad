@@ -25,6 +25,7 @@ from app.core.config import settings
 
 class EventType(Enum):
     FILE_UPLOAD_RECORD = "file.upload_record"
+    SEND_ADVISOR_STATS_WECHAT_REPORT_TASK = "send.advisor.stats.wechat.report.task"
 
 class EventPriority(Enum):
     LOW = 0
@@ -87,7 +88,7 @@ class EventListener(BaseModel):
     handler: Annotated[Callable, Field(description="处理函数")]
     priority: Annotated[EventPriority, Field(default=EventPriority.NORMAL,description="优先级")]
     max_concurrent: Annotated[int, Field(default=1,description="最大并发数")]
-    timeout: Annotated[float, Field(default=5.0,description="超时时间")]
+    timeout: Annotated[float, Field(default=30.0,description="超时时间")]
     name: Annotated[str, Field(description="名称")]
     active_count: Annotated[int, Field(default=0,description="活跃计数")]
     total_processed: Annotated[int, Field(default=0,description="处理总数")]

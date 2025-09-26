@@ -5,7 +5,6 @@
 """
 
 from datetime import datetime, date
-from typing import Optional
 from sqlalchemy import BigInteger, String, Date, SmallInteger, Index, UniqueConstraint
 from sqlalchemy.types import DECIMAL
 from sqlalchemy.orm import Mapped, mapped_column
@@ -28,6 +27,7 @@ class AdvisorCallDurationStats(Base):
     total_connected: Mapped[int] = mapped_column(BigInteger, default=0, comment="总接通数目")
     total_unconnected: Mapped[int] = mapped_column(BigInteger, default=0, comment="未接通总数")
     total_duration: Mapped[int] = mapped_column(BigInteger, default=0, comment="总通话时长(秒)")
+    total_duration_correction: Mapped[int] = mapped_column(BigInteger, default=0, comment="总通话时长修正值(秒)")
     connection_rate: Mapped[float] = mapped_column(DECIMAL(5, 2), default=0.00, comment="接通率(%)")
     
     # 呼出统计

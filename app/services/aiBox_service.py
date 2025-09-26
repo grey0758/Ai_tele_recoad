@@ -6,10 +6,10 @@ aiBox 服务层
 
 from typing import Optional
 from datetime import date
+import httpx
 from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.dialects.mysql import insert
-
+from app.models.events import EventType, Event
 from app.core.event_bus import ProductionEventBus
 from app.db.database import Database
 from app.services.base_service import BaseService
@@ -21,6 +21,7 @@ from app.schemas.advisor_call_duration_stats import (
     AdvisorCallDurationStatsUpsertRequest,
 )
 from app.core.logger import get_logger
+from app.core.config import settings
 
 logger = get_logger(__name__)
 
@@ -31,9 +32,13 @@ class AiBoxService(BaseService):
     def __init__(self, event_bus: ProductionEventBus, database: Database):
         super().__init__(event_bus=event_bus, service_name="AiBoxService")
         self.database = database
-
+        self.event_bus = event_bus
     async def initialize(self) -> bool:
         return True
+
+    async def register_event_listeners(self):
+        """注册事件监听器"""
+        await self._register_listener(EventType.SEND_ADVISOR_STATS_WECHAT_REPORT_TASK, self.send_advisor_stats_wechat_report_task)
 
     async def upsert_advisor_call_duration_stats(
         self, stats_data: AdvisorCallDurationStatsUpsertRequest
@@ -64,6 +69,18 @@ class AiBoxService(BaseService):
                 if existing_stats:
                     # 更新现有记录
                     update_data = stats_data.model_dump(exclude_unset=True)
+                    
+                    # 获取更新前的修正值并应用到新的 total_duration
+                    if 'total_duration' in update_data:
+                        previous_correction = existing_stats.total_duration_correction or 0
+                        new_duration = update_data['total_duration']
+                        update_data['total_duration'] = new_duration + previous_correction
+                        update_data['total_duration_correction'] = previous_correction
+                        logger.info(
+                            "应用修正值到总时长: 新时长=%d秒, 修正值=%d秒, 修正后时长=%d秒",
+                            new_duration, previous_correction, update_data['total_duration']
+                        )
+                    
                     for field, value in update_data.items():
                         setattr(existing_stats, field, value)
 
@@ -78,7 +95,12 @@ class AiBoxService(BaseService):
                     return existing_stats
                 else:
                     # 插入新记录
-                    new_stats = AdvisorCallDurationStats(**stats_data.model_dump())
+                    stats_dict = stats_data.model_dump()
+                    
+                    # 新记录的修正值默认为0
+                    stats_dict['total_duration_correction'] = 0
+                    
+                    new_stats = AdvisorCallDurationStats(**stats_dict)
                     db_session.add(new_stats)
                     await db_session.commit()
                     await db_session.refresh(new_stats)
@@ -104,7 +126,7 @@ class AiBoxService(BaseService):
                 return await self._get_stats_by_advisor_and_date(
                     db_session, advisor_id, stats_date
                 )
-            except Exception as e:
+            except Exception as e:  # pylint: disable=broad-except
                 logger.error("获取顾问通话时长统计失败: %s", e)
                 return None
 
@@ -131,7 +153,7 @@ class AiBoxService(BaseService):
                 return []
 
     async def get_all_advisor_stats_by_date(
-        self, stats_date: date
+        self, stats_date: date = date.today()
     ) -> list[AdvisorCallDurationStats]:
         """获取指定日期的所有顾问通话时长统计"""
         async with self.database.get_session() as db_session:
@@ -142,7 +164,7 @@ class AiBoxService(BaseService):
                     .order_by(AdvisorCallDurationStats.advisor_id.asc())
                 )
                 return list(result.scalars().all())
-            except Exception as e:
+            except Exception as e:  # pylint: disable=broad-except
                 logger.error("获取指定日期所有顾问通话时长统计失败: %s", e)
                 return []
 
@@ -171,4 +193,129 @@ class AiBoxService(BaseService):
         )
         row = result.first()
         if row:
-            return (row.advisor_id, row.advisor_name) if row else (0, "")
+            return (row.advisor_id, row.advisor_name)
+        return (0, "")
+
+    async def send_wechat_message(
+        self, 
+        to_wxid: str, 
+        message: str, 
+        authorization_token: str = ""
+    ) -> bool:
+        """
+        发送微信消息
+        
+        Args:
+            to_wxid: 接收者的微信ID
+            message: 要发送的消息内容
+            authorization_token: 授权令牌
+            
+        Returns:
+            bool: 发送是否成功
+        """
+        url = settings.wechat_bot_url
+        
+        headers = {
+            "Content-Type": "application/json"
+        }
+        
+        # 将token放到params字段中
+        params = {
+            "token": authorization_token
+        }
+        
+        data = {
+            "to_wxid": to_wxid,
+            "msg": {
+                "text": message,
+                "xml": "",
+                "url": "",
+                "name": "",
+                "url_thumb": ""
+            },
+            "to_ren": "",
+            "msg_type": 1,
+            "send_type": 1
+        }
+        
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(url, headers=headers, json=data, params=params)
+                
+                if response.status_code == 200:
+                    logger.info("微信消息发送成功: to_wxid=%s", to_wxid)
+                    return True
+                else:
+                    logger.error(
+                        "微信消息发送失败: status_code=%d, response=%s", 
+                        response.status_code, 
+                        response.text
+                    )
+                    return False
+                    
+        except httpx.TimeoutException:
+            logger.error("微信消息发送超时: to_wxid=%s", to_wxid)
+            return False
+        except Exception as e:
+            logger.error("微信消息发送异常: to_wxid=%s, error=%s", to_wxid, str(e))
+            return False
+
+    #发送顾问时长统计微信播报定时任务
+    async def send_advisor_stats_wechat_report_task(self, _event: Event) -> bool:
+        """发送顾问时长统计微信播报定时任务"""
+        stats_list = await self.get_all_advisor_stats_by_date(date.today())
+        logger.info("发送顾问时长统计微信播报定时任务，共获取到 %d 条记录", len(stats_list))
+        
+        # 记录每个顾问的统计信息
+        for stats in stats_list:
+            logger.info(
+                "顾问统计 - ID: %d, 姓名: %s, 日期: %s, 总通话时长: %d秒, 接通率: %.2f%%",
+                stats.advisor_id,
+                stats.advisor_name,
+                stats.stats_date,       
+                stats.total_duration,
+                float(stats.connection_rate) if stats.connection_rate else 0.0
+            )
+        
+        # 生成微信播报消息
+        if stats_list:
+            msg_lines = ["=== 顾问待打时长统计 ==="]
+            for stats in stats_list:
+                # 计算待打时长（假设目标时长是120分钟）
+                target_duration_minutes = 120
+                current_duration_minutes = stats.total_duration / 60  # 转换为分钟
+                remaining_minutes = max(0, target_duration_minutes - current_duration_minutes)
+                
+                msg_lines.append(f"\n顾问: {stats.advisor_name}")
+                msg_lines.append(f"目标时长：{target_duration_minutes}分钟")
+                msg_lines.append(f"待打：{remaining_minutes:.1f}分钟")
+            
+            msg = "\n".join(msg_lines)
+            logger.info("生成的微信播报消息:\n%s", msg)
+        else:
+            logger.info("没有找到今日的顾问统计记录")
+        
+        # 发送微信播报消息
+        if stats_list:
+            # 这里需要配置实际的微信ID和授权令牌
+            # 建议从配置文件或环境变量中读取
+            target_wxid = "50251377407@chatroom"
+            auth_token = settings.wechat_bot_token
+            # 修复类型问题，确保 target_wxid 和 auth_token 都为 str 类型
+            if target_wxid is None or auth_token is None:
+                logger.error("微信ID或授权令牌未配置，无法发送微信播报")
+                success = False
+            else:
+                success = await self.send_wechat_message(
+                    to_wxid=str(target_wxid),
+                    message=msg,
+                    authorization_token=str(auth_token)
+                )
+            if success:
+                logger.info("顾问时长统计微信播报发送成功")
+                return True
+            else:
+                logger.error("顾问时长统计微信播报发送失败")
+        else:
+            logger.info("没有统计记录，跳过微信播报发送")
+        return False

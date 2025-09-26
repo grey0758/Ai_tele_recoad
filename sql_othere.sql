@@ -13,6 +13,7 @@ CREATE TABLE advisor_call_duration_stats (
     total_connected BIGINT NOT NULL DEFAULT 0 COMMENT '总接通数目',
     total_unconnected BIGINT NOT NULL DEFAULT 0 COMMENT '未接通总数',
     total_duration BIGINT NOT NULL DEFAULT 0 COMMENT '总通话时长(秒)',
+    total_duration_correction BIGINT NOT NULL DEFAULT 0 COMMENT '总通话时长修正值(秒)',
     connection_rate DECIMAL(5,2) NOT NULL DEFAULT 0.00 COMMENT '接通率(%)',
     
     -- 呼出统计
@@ -68,7 +69,7 @@ CREATE TABLE advisor_call_duration_stats (
 -- 插入顾问通话时长统计数据
 INSERT INTO advisor_call_duration_stats (
     advisor_id, advisor_name, stats_date, device_id,
-    total_calls, total_connected, total_unconnected, total_duration, connection_rate,
+    total_calls, total_connected, total_unconnected, total_duration, total_duration_correction, connection_rate,
     outbound_calls, outbound_connected, outbound_unconnected, outbound_duration, outbound_connection_rate,
     inbound_calls, inbound_connected, inbound_unconnected, inbound_duration, inbound_connection_rate,
     duration_under_5s, duration_5s_to_10s, duration_10s_to_20s, duration_20s_to_30s, 
@@ -82,7 +83,7 @@ INSERT INTO advisor_call_duration_stats (
 (
     1001, '张小明', '2025-09-25', 'ebt-5b343ab5',
     -- 总体统计
-    150, 120, 30, 7200, 80.00,
+    150, 120, 30, 7200, 0, 80.00,
     -- 呼出统计  
     90, 75, 15, 4500, 83.33,
     -- 呼入统计
@@ -98,7 +99,7 @@ INSERT INTO advisor_call_duration_stats (
 (
     1002, '李小红', '2025-09-25', '8002',
     -- 总体统计
-    200, 180, 20, 10800, 90.00,
+    200, 180, 20, 10800, 0, 90.00,
     -- 呼出统计
     120, 110, 10, 6600, 91.67,
     -- 呼入统计

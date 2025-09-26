@@ -36,6 +36,7 @@ dependencies = [
     # 通用工具
     "numpy",
     "requests",
+    "httpx",
     "rich",
     "aiofiles",
     "aiomysql>=0.2.0",
