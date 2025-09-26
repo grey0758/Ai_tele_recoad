@@ -88,3 +88,21 @@ async def get_advisor_call_duration_stats_range(
     except Exception as e:
         logger.error("获取顾问通话时长统计范围失败: %s", e)
         return ResponseBuilder.error(f"获取顾问通话时长统计范围失败: {str(e)}", ResponseCode.INTERNAL_ERROR)
+
+
+@router.get("/advisor-call-duration-stats/by-date", response_model=ResponseData[List[AdvisorCallDurationStatsResponse]], summary="获取指定日期所有顾问通话时长统计")     
+async def get_all_advisor_call_duration_stats_by_date(
+    stats_date: date = Query(default_factory=date.today, description="统计日期（默认今天）"),
+    aibox_service: AiBoxService = Depends(get_aibox_service)
+):
+    """
+    获取指定日期的所有顾问通话时长统计
+    """
+    try:
+        stats_list = await aibox_service.get_all_advisor_stats_by_date(stats_date)
+        response_data = [AdvisorCallDurationStatsResponse.model_validate(stats) for stats in stats_list]
+        return ResponseBuilder.success(response_data, "获取指定日期所有顾问通话时长统计成功")
+        
+    except Exception as e:
+        logger.error("获取指定日期所有顾问通话时长统计失败: %s", e)
+        return ResponseBuilder.error(f"获取指定日期所有顾问通话时长统计失败: {str(e)}", ResponseCode.INTERNAL_ERROR)
