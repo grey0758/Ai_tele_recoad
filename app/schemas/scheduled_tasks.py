@@ -6,7 +6,7 @@
 
 from datetime import datetime, time
 from typing import Optional, List, Annotated
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from app.schemas.base import ResponseData
 
 
@@ -45,9 +45,7 @@ class ScheduledTaskResponse(ScheduledTaskBase):
     created_at: Annotated[datetime, Field(..., description="创建时间")]
     updated_at: Annotated[datetime, Field(..., description="更新时间")]
 
-    class Config:
-        """配置模型行为"""
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class TaskExecutionLogBase(BaseModel):
@@ -68,9 +66,7 @@ class TaskExecutionLogResponse(TaskExecutionLogBase):
     id: Annotated[int, Field(..., description="主键ID")]
     created_at: Annotated[datetime, Field(..., description="创建时间")]
 
-    class Config:
-        """配置模型行为"""
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class TaskExecutionLogWithTask(TaskExecutionLogResponse):

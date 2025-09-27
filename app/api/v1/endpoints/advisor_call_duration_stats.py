@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, Query, Path
 
 from app.services.aibox_service import Aiboxservice
 from app.schemas.advisor_call_duration_stats import (
-    AdvisorCallDurationStatsUpsertRequest,
+    AdvisorCallDurationStatsUpdateRequestWithDeviceIdAndStatsDate,
     AdvisorCallDurationStatsResponse,
 )
 from app.models.events import EventType
@@ -29,7 +29,7 @@ router = APIRouter()
     summary="更新或插入顾问通话时长统计",
 )
 async def upsert_advisor_call_duration_stats(
-    stats_data: AdvisorCallDurationStatsUpsertRequest,
+    stats_data: AdvisorCallDurationStatsUpdateRequestWithDeviceIdAndStatsDate,
     aibox_service: Aiboxservice = Depends(get_aibox_service),
 ):
     """
@@ -42,7 +42,7 @@ async def upsert_advisor_call_duration_stats(
         response_data = AdvisorCallDurationStatsResponse.model_validate(stats)
         return ResponseBuilder.success(response_data, "更新或插入顾问通话时长统计成功")
 
-    except Exception as e:
+    except Exception as e:  # pylint: disable=broad-except
         logger.error("更新或插入顾问通话时长统计失败: %s", e)
         return ResponseBuilder.error(
             f"更新或插入顾问通话时长统计失败: {str(e)}", ResponseCode.INTERNAL_ERROR
@@ -72,7 +72,7 @@ async def get_advisor_call_duration_stats(
         response_data = AdvisorCallDurationStatsResponse.model_validate(stats)
         return ResponseBuilder.success(response_data, "获取顾问通话时长统计成功")
 
-    except Exception as e:
+    except Exception as e:  # pylint: disable=broad-except
         logger.error("获取顾问通话时长统计失败: %s", e)
         return ResponseBuilder.error(
             f"获取顾问通话时长统计失败: {str(e)}", ResponseCode.INTERNAL_ERROR
@@ -103,7 +103,7 @@ async def get_advisor_call_duration_stats_range(
         ]
         return ResponseBuilder.success(response_data, "获取顾问通话时长统计范围成功")
 
-    except Exception as e:
+    except Exception as e:  # pylint: disable=broad-except
         logger.error("获取顾问通话时长统计范围失败: %s", e)
         return ResponseBuilder.error(
             f"获取顾问通话时长统计范围失败: {str(e)}", ResponseCode.INTERNAL_ERROR
@@ -134,7 +134,7 @@ async def get_all_advisor_call_duration_stats_by_date(
             response_data, "获取指定日期所有顾问通话时长统计成功"
         )
 
-    except Exception as e:
+    except Exception as e:  # pylint: disable=broad-except
         logger.error("获取指定日期所有顾问通话时长统计失败: %s", e)
         return ResponseBuilder.error(
             f"获取指定日期所有顾问通话时长统计失败: {str(e)}",
@@ -152,25 +152,28 @@ async def trigger_advisor_stats_wechat_report(
 ):
     """
     手动触发顾问时长统计微信播报任务
-    
+
     不需要任何输入参数，直接调用即可触发微信播报任务
     """
     try:
-        success = await aibox_service.emit_event(EventType.SEND_ADVISOR_STATS_WECHAT_REPORT_TASK, data=None, wait_for_result=True)
+        success = await aibox_service.emit_event(
+            EventType.SEND_ADVISOR_STATS_WECHAT_REPORT_TASK,
+            data=None,
+            wait_for_result=True,
+        )
         if success:
             return ResponseBuilder.success(
-                {"triggered": True, "message": "顾问时长统计微信播报任务已触发"}, 
-                "手动触发顾问时长统计微信播报任务成功"
+                {"triggered": True, "message": "顾问时长统计微信播报任务已触发"},
+                "手动触发顾问时长统计微信播报任务成功",
             )
         else:
             return ResponseBuilder.error(
-                "手动触发顾问时长统计微信播报任务失败", 
-                ResponseCode.INTERNAL_ERROR
+                "手动触发顾问时长统计微信播报任务失败", ResponseCode.INTERNAL_ERROR
             )
 
     except Exception as e:  # pylint: disable=broad-except
         logger.error("手动触发顾问时长统计微信播报任务失败: %s", e)
         return ResponseBuilder.error(
-            f"手动触发顾问时长统计微信播报任务失败: {str(e)}", 
-            ResponseCode.INTERNAL_ERROR
+            f"手动触发顾问时长统计微信播报任务失败: {str(e)}",
+            ResponseCode.INTERNAL_ERROR,
         )

@@ -18,7 +18,7 @@ from app.models.advisor_call_duration_stats import (
     AdvisorDeviceConfig,
 )
 from app.schemas.advisor_call_duration_stats import (
-    AdvisorCallDurationStatsUpsertRequest,
+    AdvisorCallDurationStatsUpdateRequestWithDeviceIdAndStatsDate,
 )
 from app.core.logger import get_logger
 from app.core.config import settings
@@ -45,7 +45,7 @@ class Aiboxservice(BaseService):
         )
 
     async def upsert_advisor_call_duration_stats(
-        self, stats_data: AdvisorCallDurationStatsUpsertRequest
+        self, stats_data: AdvisorCallDurationStatsUpdateRequestWithDeviceIdAndStatsDate
     ) -> AdvisorCallDurationStats:
         """
         更新或插入顾问通话时长统计
@@ -58,10 +58,8 @@ class Aiboxservice(BaseService):
                 advisor_id, advisor_name = await self._get_advisor_id_by_device_id(
                     db_session, stats_data.device_id
                 )
-                if not advisor_id:
-                    raise ValueError(
-                        f"设备ID {stats_data.device_id} 对应的顾问ID不存在"
-                    )
+                if not advisor_id and not advisor_name:
+                    raise ValueError(f"设备ID {stats_data.device_id} 对应的顾问ID和顾问姓名不存在")
                 stats_data.advisor_id = advisor_id
                 stats_data.advisor_name = advisor_name
 
@@ -76,13 +74,9 @@ class Aiboxservice(BaseService):
 
                     # 获取更新前的修正值并应用到新的 total_duration
                     if "total_duration" in update_data:
-                        previous_correction = (
-                            existing_stats.total_duration_correction or 0
-                        )
+                        previous_correction = existing_stats.total_duration_correction or 0
                         new_duration = update_data["total_duration"]
-                        update_data["total_duration"] = (
-                            new_duration + previous_correction
-                        )
+                        update_data["total_duration"] = new_duration + previous_correction
                         update_data["total_duration_correction"] = previous_correction
                         logger.info(
                             "应用修正值到总时长: 新时长=%d秒, 修正值=%d秒, 修正后时长=%d秒",
@@ -300,11 +294,8 @@ class Aiboxservice(BaseService):
 
         # 发送微信播报消息
         if stats_list:
-            # 这里需要配置实际的微信ID和授权令牌
-            # 建议从配置文件或环境变量中读取
             target_wxid = settings.wechat_default_wxid
             auth_token = settings.wechat_bot_token
-            # 修复类型问题，确保 target_wxid 和 auth_token 都为 str 类型
             if target_wxid is None or auth_token is None:
                 logger.error("微信ID或授权令牌未配置，无法发送微信播报")
                 success = False

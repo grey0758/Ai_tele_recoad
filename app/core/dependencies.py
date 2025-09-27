@@ -1,3 +1,4 @@
+
 # app/core/dependencies.py
 """
 服务容器 - 支持事件总线和生命周期管理
@@ -68,24 +69,11 @@ class EnhancedServiceContainer:
     async def _initialize_services(self):
         """初始化业务服务"""
         self._services["db_service"] = Database()
-
         self._services["file_service"] = FileService(self._event_bus)
-
-        self._services["lead_service"] = LeadService(
-            self._event_bus, self._services["db_service"]
-        )
-
-        self._services["aibox_service"] = Aiboxservice(
-            self._event_bus, self._services["db_service"]
-        )
-
-        self._services["scheduled_tasks_service"] = ScheduledTasksService(
-            self._event_bus, self._services["db_service"]
-        )
-
-        self._services["scheduler_service"] = SchedulerService(
-            self._event_bus, self._services["db_service"], self._services["scheduled_tasks_service"], self._services["aibox_service"]
-        )
+        self._services["lead_service"] = LeadService(self._event_bus, self._services["db_service"])
+        self._services["aibox_service"] = Aiboxservice(self._event_bus, self._services["db_service"])
+        self._services["scheduled_tasks_service"] = ScheduledTasksService(self._event_bus, self._services["db_service"])
+        self._services["scheduler_service"] = SchedulerService(self._event_bus, self._services["db_service"], self._services["scheduled_tasks_service"], self._services["aibox_service"])
 
         for name, service in self._services.items():
             if hasattr(service, "initialize"):

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 事件总线
 """
@@ -183,6 +182,8 @@ class ProductionEventBus:
         """发送事件"""
         if not self.running:
             raise RuntimeError("EventBus is not running")
+        if event.event_id is None:
+            raise ValueError("event.event_id cannot be None")
 
         logger.debug(
             "Emitting event | event_id=%s, event_type=%s, "
@@ -223,7 +224,7 @@ class ProductionEventBus:
         if event.wait_for_result:
             try:
                 if event.result_future is None:
-                    raise RuntimeError("Event result_future 未初始化")
+                    raise RuntimeError("Event result_future uninitialized")
                 result = await asyncio.wait_for(
                     event.result_future, timeout=event.timeout
                 )

@@ -2,9 +2,8 @@
 通用响应数据结构
 """
 
-from typing import TypeVar, Generic, Any, List
+from typing import TypeVar, Generic, Any, List, Annotated
 from pydantic import BaseModel, Field, ConfigDict
-from typing_extensions import Annotated
 
 # 定义泛型类型变量
 T = TypeVar("T")

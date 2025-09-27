@@ -1,4 +1,4 @@
-#我需要设置一个顾问通话时长统计表，表名是advisor_call_duration_stats，表结构如下：
+-- 我需要设置一个顾问通话时长统计表，表名是advisor_call_duration_stats，表结构如下：
 DROP TABLE IF EXISTS advisor_call_duration_stats;
 
 CREATE TABLE advisor_call_duration_stats (
