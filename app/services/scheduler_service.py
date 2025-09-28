@@ -5,10 +5,9 @@
 提供定时任务管理、执行监控和状态管理功能
 """
 
-import asyncio
 from datetime import datetime
 from typing import Optional, Dict, Any
-from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.events import (
     EVENT_JOB_EXECUTED,
@@ -39,7 +38,7 @@ class SchedulerService(BaseService):
     ):
         super().__init__(event_bus=event_bus, service_name="SchedulerService")
         self.database = database
-        self.scheduler: Optional[BackgroundScheduler] = None
+        self.scheduler: Optional[AsyncIOScheduler] = None
         self.scheduler_running = False
         self.scheduled_tasks_service = scheduled_tasks_service
         self.aibox_service = aibox_service
@@ -53,8 +52,8 @@ class SchedulerService(BaseService):
             if not self.event_bus:
                 raise RuntimeError("EventBus not initialized")
 
-            # 创建调度器
-            self.scheduler = BackgroundScheduler()
+            # 创建异步调度器
+            self.scheduler = AsyncIOScheduler()
 
             # 添加事件监听器
             self.scheduler.add_listener(
@@ -79,9 +78,9 @@ class SchedulerService(BaseService):
             return True
 
         try:
-            # 启动调度器
+            # 启动异步调度器
             if self.scheduler:
-                self.scheduler.start()
+                await self.scheduler.start()
             self.scheduler_running = True
 
             # 加载并启动所有活跃的定时任务
@@ -98,7 +97,7 @@ class SchedulerService(BaseService):
         """停止调度器"""
         try:
             if self.scheduler and self.scheduler.running:
-                self.scheduler.shutdown(wait=False)
+                await self.scheduler.shutdown(wait=False)
 
             self.scheduler_running = False
             self.job_status.clear()
@@ -124,7 +123,7 @@ class SchedulerService(BaseService):
                 "status": "scheduled",
                 "added_at": datetime.now(),
                 "last_run": None,
-                "next_run": None,
+                "next_run": trigger.next_run_time,
                 "run_count": 0,
                 "error_count": 0,
             }
@@ -209,13 +208,12 @@ class SchedulerService(BaseService):
                     and task.task_type == "data_sync_service"
                 ):
                     try:
-                        # 解析cron表达式
                         trigger = CronTrigger.from_crontab(task.cron_expression)
 
                         # 添加任务
                         await self.add_job(
                             job_id=f"task_{task.id}",
-                            func=self._execute_advisor_stats_task,
+                            func=self._execute_scheduled_task,
                             trigger=trigger,
                             args=[task.id, task.task_name],
                             name=task.task_name,
@@ -229,8 +227,8 @@ class SchedulerService(BaseService):
         except Exception as e:  # pylint: disable=broad-except
             logger.error("加载定时任务失败: %s", str(e))
 
-    def _execute_advisor_stats_task(self, task_id: int, task_name: str):
-        """执行顾问统计数据任务"""
+    async def _execute_scheduled_task(self, task_id: int, task_name: str):
+        """执行定时任务的通用方法"""
         try:
             logger.info("开始执行定时任务: %s (ID: %s)", task_name, task_id)
 
@@ -240,14 +238,21 @@ class SchedulerService(BaseService):
                 self.job_status[job_id]["last_run"] = datetime.now()
                 self.job_status[job_id]["run_count"] += 1
 
+            # 根据任务名称（事件类型值）获取对应的事件类型
             try:
-                asyncio.run(
-                    self.emit_event(EventType.SEND_ADVISOR_STATS_WECHAT_REPORT_TASK)
-                )
-            finally:
-                pass
+                event_type = EventType(task_name)
+            except ValueError:
+                logger.error("未找到任务 %s 对应的事件类型", task_name)
+                return
 
-            logger.info("定时任务 %s 执行完成", task_name)
+            try:
+                # 发送事件（异步调用）
+                await self.emit_event(event_type)
+                logger.info("定时任务 %s 执行完成", task_name)
+
+            except Exception as event_error:  # pylint: disable=broad-except
+                logger.error("发送事件失败: %s", str(event_error))
+                raise
 
         except Exception as e:  # pylint: disable=broad-except
             logger.error("执行定时任务 %s 失败: %s", task_name, str(e))
