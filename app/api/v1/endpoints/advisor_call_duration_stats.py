@@ -155,40 +155,10 @@ async def trigger_advisor_stats_wechat_report(
 
     不需要任何输入参数，直接调用即可触发微信播报任务
     """
-    try:
-        logger.info("开始触发顾问时长统计微信播报任务")
-        success = await aibox_service.emit_event(
+    #直接返回ResponseData[None]
+    return await aibox_service.emit_event(
             EventType.SEND_ADVISOR_STATS_WECHAT_REPORT_TASK,
             data=None,
             wait_for_result=True,
             max_retries=0,
-        )
-        logger.info("事件处理完成，结果: %s", success)
-        if success:
-            return ResponseBuilder.success(
-                {"triggered": True, "message": "顾问时长统计微信播报任务已触发"},
-                "手动触发顾问时长统计微信播报任务成功",
-            )
-        else:
-            return ResponseBuilder.error(
-                "手动触发顾问时长统计微信播报任务失败", ResponseCode.INTERNAL_ERROR
-            )
-
-    except ValueError as e:
-        logger.warning("捕获到ValueError异常: %s", str(e))
-        if "跳过微信播报发送" in str(e):
-            return ResponseBuilder.success(
-                {"skipped": True, "message": "所有顾问的时长统计都不符合播报条件，已跳过发送"},
-                "任务执行完成（已跳过）"
-            )
-        else:
-            return ResponseBuilder.error(
-                f"手动触发顾问时长统计微信播报任务失败: {str(e)}",
-                ResponseCode.INTERNAL_ERROR,
-            )
-    except Exception as e:  # pylint: disable=broad-except
-        logger.error("手动触发顾问时长统计微信播报任务失败: %s", e)
-        return ResponseBuilder.error(
-            f"手动触发顾问时长统计微信播报任务失败: {str(e)}",
-            ResponseCode.INTERNAL_ERROR,
         )
