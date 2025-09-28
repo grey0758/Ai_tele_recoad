@@ -80,7 +80,7 @@ class SchedulerService(BaseService):
         try:
             # 启动异步调度器
             if self.scheduler:
-                await self.scheduler.start()
+                self.scheduler.start()
             self.scheduler_running = True
 
             # 加载并启动所有活跃的定时任务
@@ -97,7 +97,7 @@ class SchedulerService(BaseService):
         """停止调度器"""
         try:
             if self.scheduler and self.scheduler.running:
-                await self.scheduler.shutdown(wait=False)
+                self.scheduler.shutdown(wait=False)
 
             self.scheduler_running = False
             self.job_status.clear()
@@ -118,12 +118,16 @@ class SchedulerService(BaseService):
 
             self.scheduler.add_job(func=func, trigger=trigger, id=job_id, **kwargs)
 
+            # 获取任务的 next_run_time
+            job = self.scheduler.get_job(job_id)
+            next_run_time = job.next_run_time if job else None
+
             # 更新任务状态
             self.job_status[job_id] = {
                 "status": "scheduled",
                 "added_at": datetime.now(),
                 "last_run": None,
-                "next_run": trigger.next_run_time,
+                "next_run": next_run_time,
                 "run_count": 0,
                 "error_count": 0,
             }
