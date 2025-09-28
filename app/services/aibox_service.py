@@ -9,7 +9,7 @@ from datetime import date
 import httpx
 from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.models.events import EventType, Event
+from app.models.events import EventType, Event, EventPriority
 from app.core.event_bus import ProductionEventBus
 from app.db.database import Database
 from app.services.base_service import BaseService
@@ -39,7 +39,11 @@ class Aiboxservice(BaseService):
 
     async def register_event_listeners(self):
         """注册事件监听器"""
-        await self._register_listener(EventType.SEND_ADVISOR_STATS_WECHAT_REPORT_TASK, self.send_advisor_stats_wechat_report_task)
+        await self._register_listener(
+            EventType.SEND_ADVISOR_STATS_WECHAT_REPORT_TASK,
+            self.send_advisor_stats_wechat_report_task,
+            priority=EventPriority.HIGH
+        )
 
     async def upsert_advisor_call_duration_stats(
         self, stats_data: AdvisorCallDurationStatsUpdateRequestWithDeviceIdAndStatsDate
