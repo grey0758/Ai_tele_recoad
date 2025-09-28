@@ -9,9 +9,10 @@ from datetime import date
 import httpx
 from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.models.events import EventType, Event, EventPriority
+from app.models.events import Event, EventType
 from app.core.event_bus import ProductionEventBus
 from app.db.database import Database
+from app.schemas.base import ResponseBuilder, ResponseCode, ResponseData
 from app.services.base_service import BaseService
 from app.models.advisor_call_duration_stats import (
     AdvisorCallDurationStats,
@@ -39,11 +40,7 @@ class Aiboxservice(BaseService):
 
     async def register_event_listeners(self):
         """注册事件监听器"""
-        await self._register_listener(
-            EventType.SEND_ADVISOR_STATS_WECHAT_REPORT_TASK,
-            self.send_advisor_stats_wechat_report_task,
-            priority=EventPriority.HIGH
-        )
+        await self._register_listener(EventType.SEND_ADVISOR_STATS_WECHAT_REPORT_TASK, self.send_advisor_stats_wechat_report_task)
 
     async def upsert_advisor_call_duration_stats(
         self, stats_data: AdvisorCallDurationStatsUpdateRequestWithDeviceIdAndStatsDate
@@ -255,7 +252,7 @@ class Aiboxservice(BaseService):
             return False
 
     # 发送顾问时长统计微信播报定时任务
-    async def send_advisor_stats_wechat_report_task(self, _event: Event) -> bool:
+    async def send_advisor_stats_wechat_report_task(self, _event: Event) -> ResponseData[None]:
         """发送顾问时长统计微信播报定时任务"""
         stats_list = await self.get_all_advisor_stats_by_date(date.today())
         logger.info("发送顾问时长统计微信播报定时任务，共获取到 %d 条记录", len(stats_list))
@@ -278,7 +275,10 @@ class Aiboxservice(BaseService):
         # 如果过滤后没有记录，则不播报
         if not filtered_stats_list:
             logger.info("所有顾问的 total_duration 都为 0或大于等于7200，跳过微信播报发送")
-            raise ValueError("所有顾问的 total_duration 都为 0或大于等于7200，跳过微信播报发送")
+            return ResponseBuilder.success(
+                data=None,
+                message="所有顾问的 total_duration 都为 0或大于等于7200，跳过微信播报发送"
+            )
 
         # 生成微信播报消息
         msg_lines = ["=== 顾问待打时长统计 ==="]
@@ -305,7 +305,14 @@ class Aiboxservice(BaseService):
 
         if success:
             logger.info("顾问时长统计微信播报发送成功")
-            return True
+            return ResponseBuilder.success(
+                data=None,
+                message="顾问时长统计微信播报发送成功"
+            )
         else:
             logger.error("顾问时长统计微信播报发送失败")
-            return False
+            return ResponseBuilder.error(
+                data=None,
+                message="顾问时长统计微信播报发送失败",
+                code=ResponseCode.INTERNAL_ERROR
+            )
