@@ -299,3 +299,40 @@ class LeadService(BaseService):
         """在指定会话中根据线索编号获取线索"""
         result = await db_session.execute(select(Lead).where(Lead.lead_no == lead_no))
         return result.scalar_one_or_none()
+
+    async def get_status_mapping(self) -> list:
+        """获取状态映射配置"""
+        async with self.database.get_session() as db_session:
+            try:
+                query = text("""
+                    SELECT 
+                        status_type,
+                        type_name,
+                        value,
+                        code,
+                        label,
+                        parent_id,
+                        sort_order
+                    FROM v_frontend_status_mapping
+                    ORDER BY status_type, parent_id IS NOT NULL, sort_order
+                """)
+
+                result = await db_session.execute(query)
+                rows = result.fetchall()
+
+                return [
+                    {
+                        "status_type": row.status_type,
+                        "type_name": row.type_name,
+                        "value": row.value,
+                        "code": row.code,
+                        "label": row.label,
+                        "parent_id": row.parent_id,
+                        "sort_order": row.sort_order
+                    }
+                    for row in rows
+                ]
+
+            except Exception as e:
+                logger.error("获取状态映射失败: %s", e)
+                raise

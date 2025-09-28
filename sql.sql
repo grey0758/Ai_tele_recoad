@@ -304,7 +304,7 @@ CREATE TABLE `advisors`  (
   INDEX `idx_employee_no`(`employee_no` ASC) USING BTREE,
   INDEX `idx_status`(`status` ASC) USING BTREE
 --   CONSTRAINT `advisors_ibfk_1` FOREIGN KEY (`group_id`) REFERENCES `advisor_groups` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT
-) ENGINE = InnoDB AUTO_INCREMENT = 4 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '顾问表' ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '顾问表' ROW_FORMAT = Dynamic;
 
 INSERT INTO advisors (group_id, name, employee_no, status) VALUES
 (1, '张三', 'EMP001', 1),
@@ -312,7 +312,10 @@ INSERT INTO advisors (group_id, name, employee_no, status) VALUES
 (2, '王五', 'EMP003', 1),
 (2, '赵六', 'EMP004', 1),
 (3, '孙七', 'EMP005', 1),
-(3, '周八', 'EMP006', 1);
+(3, '周八', 'EMP006', 1),
+(1, '顾问7', 'EMP007', 1),
+(2, '顾问8', 'EMP008', 1),
+(3, '顾问9', 'EMP009', 1);
 
 -- =====================================================
 -- 线索主表

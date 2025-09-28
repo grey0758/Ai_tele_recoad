@@ -18,6 +18,7 @@ from app.schemas.lead import (
 )
 from app.core.dependencies import get_lead_service
 from app.core.logger import get_logger
+from app.schemas.base import ResponseBuilder, ResponseData
 
 logger = get_logger(__name__)
 
@@ -288,3 +289,26 @@ async def get_leads_by_status(
     except Exception as e:
         logger.error("根据状态获取线索失败: %s", e)
         raise HTTPException(status_code=500, detail=f"根据状态获取线索失败: {str(e)}") from e
+
+
+@router.get("/leads/status-mapping", response_model=ResponseData[list], summary="获取状态映射配置")
+async def get_status_mapping(
+    lead_service: LeadService = Depends(get_lead_service)
+):
+    """
+    获取所有状态映射配置
+    
+    返回所有状态类型的映射关系，包括：
+    - 电话状态
+    - 微信状态  
+    - 私域回看状态
+    - 私域参加状态
+    - 日程状态
+    - 合同状态
+    """
+    try:
+        result = await lead_service.get_status_mapping()
+        return ResponseBuilder.success(result, "获取状态映射成功")
+    except Exception as e:
+        logger.error("获取状态映射失败: %s", e)
+        raise HTTPException(status_code=500, detail=f"获取状态映射失败: {str(e)}") from e
