@@ -160,6 +160,7 @@ async def trigger_advisor_stats_wechat_report(
             EventType.SEND_ADVISOR_STATS_WECHAT_REPORT_TASK,
             data=None,
             wait_for_result=True,
+            max_retries=0,
         )
         if success:
             return ResponseBuilder.success(

@@ -274,7 +274,7 @@ class Aiboxservice(BaseService):
         # 如果过滤后没有记录，则不播报
         if not filtered_stats_list:
             logger.info("所有顾问的 total_duration 都为 0或大于等于7200，跳过微信播报发送")
-            return False
+            raise ValueError("所有顾问的 total_duration 都为 0或大于等于7200，跳过微信播报发送")
 
         # 生成微信播报消息
         msg_lines = ["=== 顾问待打时长统计 ==="]
