@@ -39,10 +39,7 @@ class Aiboxservice(BaseService):
 
     async def register_event_listeners(self):
         """注册事件监听器"""
-        await self._register_listener(
-            EventType.SEND_ADVISOR_STATS_WECHAT_REPORT_TASK,
-            self.send_advisor_stats_wechat_report_task,
-        )
+        await self._register_listener(EventType.SEND_ADVISOR_STATS_WECHAT_REPORT_TASK, self.send_advisor_stats_wechat_report_task)
 
     async def upsert_advisor_call_duration_stats(
         self, stats_data: AdvisorCallDurationStatsUpdateRequestWithDeviceIdAndStatsDate
@@ -257,9 +254,11 @@ class Aiboxservice(BaseService):
     async def send_advisor_stats_wechat_report_task(self, _event: Event) -> bool:
         """发送顾问时长统计微信播报定时任务"""
         stats_list = await self.get_all_advisor_stats_by_date(date.today())
-        logger.info(
-            "发送顾问时长统计微信播报定时任务，共获取到 %d 条记录", len(stats_list)
-        )
+        logger.info("发送顾问时长统计微信播报定时任务，共获取到 %d 条记录", len(stats_list))
+
+        # 过滤掉 total_duration 为 0 的顾问记录
+        filtered_stats_list = [stats for stats in stats_list if stats.total_duration > 0]
+        logger.info("过滤后剩余 %d 条记录（已排除 total_duration 为 0 的记录）", len(filtered_stats_list))
 
         # 记录每个顾问的统计信息
         for stats in stats_list:
@@ -272,44 +271,37 @@ class Aiboxservice(BaseService):
                 float(stats.connection_rate) if stats.connection_rate else 0.0,
             )
 
+        # 如果过滤后没有记录，则不播报
+        if not filtered_stats_list:
+            logger.info("所有顾问的 total_duration 都为 0，跳过微信播报发送")
+            return False
+
         # 生成微信播报消息
-        if stats_list:
-            msg_lines = ["=== 顾问待打时长统计 ==="]
-            for stats in stats_list:
-                # 计算待打时长（假设目标时长是120分钟）
-                target_duration_minutes = 120
-                current_duration_minutes = stats.total_duration / 60  # 转换为分钟
-                remaining_minutes = max(
-                    0, target_duration_minutes - current_duration_minutes
-                )
+        msg_lines = ["=== 顾问待打时长统计 ==="]
+        for stats in filtered_stats_list:
+            # 计算待打时长（假设目标时长是120分钟）
+            target_duration_minutes = 120
+            current_duration_minutes = stats.total_duration / 60  # 转换为分钟
+            remaining_minutes = max(
+                0, target_duration_minutes - current_duration_minutes
+            )
 
-                msg_lines.append(f"\n顾问: {stats.advisor_name}")
-                msg_lines.append(f"目标时长：{target_duration_minutes}分钟")
-                msg_lines.append(f"待打：{remaining_minutes:.1f}分钟")
+            msg_lines.append(f"\n顾问: {stats.advisor_name}")
+            msg_lines.append(f"目标时长：{target_duration_minutes}分钟")
+            msg_lines.append(f"待打：{remaining_minutes:.1f}分钟")
 
-            msg = "\n".join(msg_lines)
-            logger.info("生成的微信播报消息:\n%s", msg)
+        msg = "\n".join(msg_lines)
+        logger.info("生成的微信播报消息:\n%s", msg)
+
+        success = await self.send_wechat_message(
+            to_wxid=settings.wechat_default_wxid,
+            message=msg,
+            authorization_token=settings.wechat_bot_token,
+            )
+
+        if success:
+            logger.info("顾问时长统计微信播报发送成功")
+            return True
         else:
-            logger.info("没有找到今日的顾问统计记录")
-
-        # 发送微信播报消息
-        if stats_list:
-            target_wxid = settings.wechat_default_wxid
-            auth_token = settings.wechat_bot_token
-            if target_wxid is None or auth_token is None:
-                logger.error("微信ID或授权令牌未配置，无法发送微信播报")
-                success = False
-            else:
-                success = await self.send_wechat_message(
-                    to_wxid=str(target_wxid),
-                    message=msg,
-                    authorization_token=str(auth_token),
-                )
-            if success:
-                logger.info("顾问时长统计微信播报发送成功")
-                return True
-            else:
-                logger.error("顾问时长统计微信播报发送失败")
-        else:
-            logger.info("没有统计记录，跳过微信播报发送")
-        return False
+            logger.error("顾问时长统计微信播报发送失败")
+            return False

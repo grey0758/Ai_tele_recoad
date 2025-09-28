@@ -53,6 +53,7 @@ dev = [
     # 开发工具
     "pytest",
     "pytest-asyncio",
+    "pytest-cov",
     "httpx",
     "black",
     "isort",
@@ -82,7 +83,25 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
-addopts = "-v --tb=short"
+addopts = [
+    "-v",
+    "--tb=short",
+    "--asyncio-mode=auto",
+    "--cov=app",
+    "--cov-report=term-missing",
+    "--cov-report=html:htmlcov",
+    "--cov-fail-under=80",
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "unit: marks tests as unit tests",
+    "performance: marks tests as performance tests",
+]
+filterwarnings = [
+    "ignore::UserWarning",
+    "ignore::DeprecationWarning",
+]
 
 [dependency-groups]
 dev = [
