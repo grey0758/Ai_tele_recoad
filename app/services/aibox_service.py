@@ -256,9 +256,9 @@ class Aiboxservice(BaseService):
         stats_list = await self.get_all_advisor_stats_by_date(date.today())
         logger.info("发送顾问时长统计微信播报定时任务，共获取到 %d 条记录", len(stats_list))
 
-        # 过滤掉 total_duration 为 0 的顾问记录
-        filtered_stats_list = [stats for stats in stats_list if stats.total_duration > 0]
-        logger.info("过滤后剩余 %d 条记录（已排除 total_duration 为 0 的记录）", len(filtered_stats_list))
+        # 过滤掉 total_duration 为 0 或大于等于7200的顾问记录
+        filtered_stats_list = [stats for stats in stats_list if 0 < stats.total_duration < 7200]
+        logger.info("过滤后剩余 %d 条记录（已排除 total_duration 为 0 或大于等于7200的记录）", len(filtered_stats_list))
 
         # 记录每个顾问的统计信息
         for stats in stats_list:
@@ -273,7 +273,7 @@ class Aiboxservice(BaseService):
 
         # 如果过滤后没有记录，则不播报
         if not filtered_stats_list:
-            logger.info("所有顾问的 total_duration 都为 0，跳过微信播报发送")
+            logger.info("所有顾问的 total_duration 都为 0或大于等于7200，跳过微信播报发送")
             return False
 
         # 生成微信播报消息
