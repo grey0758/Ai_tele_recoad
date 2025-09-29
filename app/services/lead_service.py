@@ -3,9 +3,10 @@
 
 提供线索相关的业务逻辑处理
 """
-
+import json
 from typing import Optional, Sequence
-from sqlalchemy import select, and_, or_, text
+
+from sqlalchemy import select, and_, or_, text, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.event_bus import ProductionEventBus
@@ -67,32 +68,97 @@ class LeadService(BaseService):
                 # 构建查询条件
                 conditions = []
 
+                # 基础分类信息
                 if query_params.category_id:
                     conditions.append(Lead.category_id == query_params.category_id)
+                if query_params.sub_category_id:
+                    conditions.append(Lead.sub_category_id == query_params.sub_category_id)
 
+                # 分配信息
+                if query_params.advisor_group_id:
+                    conditions.append(Lead.advisor_group_id == query_params.advisor_group_id)
+                if query_params.advisor_group_sub_id:
+                    conditions.append(Lead.advisor_group_sub_id == query_params.advisor_group_sub_id)
                 if query_params.advisor_id:
                     conditions.append(Lead.advisor_id == query_params.advisor_id)
 
+                # 客户基础信息
+                if query_params.customer_id:
+                    conditions.append(Lead.customer_id == query_params.customer_id)
+                if query_params.customer_name:
+                    conditions.append(Lead.customer_name.like(f"%{query_params.customer_name}%"))
                 if query_params.customer_phone:
-                    conditions.append(
-                        Lead.customer_phone.like(f"%{query_params.customer_phone}%")
-                    )
+                    conditions.append(Lead.customer_phone.like(f"%{query_params.customer_phone}%"))
+                if query_params.customer_email:
+                    conditions.append(Lead.customer_email.like(f"%{query_params.customer_email}%"))
+                if query_params.customer_wechat_name:
+                    conditions.append(Lead.customer_wechat_name.like(f"%{query_params.customer_wechat_name}%"))
+                if query_params.customer_wechat_number:
+                    conditions.append(Lead.customer_wechat_number.like(f"%{query_params.customer_wechat_number}%"))
 
+                # 电话状态（主状态+子状态）
                 if query_params.call_status_id:
-                    conditions.append(
-                        Lead.call_status_id == query_params.call_status_id
-                    )
+                    conditions.append(Lead.call_status_id == query_params.call_status_id)
+                if query_params.call_sub_status_id:
+                    conditions.append(Lead.call_sub_status_id == query_params.call_sub_status_id)
 
+                # 微信状态（主状态+子状态）
                 if query_params.wechat_status_id:
-                    conditions.append(
-                        Lead.wechat_status_id == query_params.wechat_status_id
-                    )
+                    conditions.append(Lead.wechat_status_id == query_params.wechat_status_id)
+                if query_params.wechat_sub_status_id:
+                    conditions.append(Lead.wechat_sub_status_id == query_params.wechat_sub_status_id)
 
+                # 私域回看状态（主状态+子状态）
+                if query_params.private_domain_review_status_id:
+                    conditions.append(Lead.private_domain_review_status_id == query_params.private_domain_review_status_id)
+                if query_params.private_domain_review_sub_status_id:
+                    conditions.append(Lead.private_domain_review_sub_status_id == query_params.private_domain_review_sub_status_id)
+
+                # 私域参加状态（主状态+子状态）
+                if query_params.private_domain_participation_status_id:
+                    conditions.append(Lead.private_domain_participation_status_id == query_params.private_domain_participation_status_id)
+                if query_params.private_domain_participation_sub_status_id:
+                    conditions.append(Lead.private_domain_participation_sub_status_id == query_params.private_domain_participation_sub_status_id)
+
+                # 日程状态（主状态+子状态）
+                if query_params.schedule_status_id:
+                    conditions.append(Lead.schedule_status_id == query_params.schedule_status_id)
+                if query_params.schedule_sub_status_id:
+                    conditions.append(Lead.schedule_sub_status_id == query_params.schedule_sub_status_id)
+                if query_params.schedule_times is not None:
+                    conditions.append(Lead.schedule_times == query_params.schedule_times)
+
+                # 合同状态（主状态+子状态）
+                if query_params.contract_status_id:
+                    conditions.append(Lead.contract_status_id == query_params.contract_status_id)
+                if query_params.contract_sub_status_id:
+                    conditions.append(Lead.contract_sub_status_id == query_params.contract_sub_status_id)
+
+                # 分析字段
+                if query_params.analysis_failed_records is not None:
+                    conditions.append(Lead.analysis_failed_records == query_params.analysis_failed_records)
+                if query_params.last_contact_record_id:
+                    conditions.append(Lead.last_contact_record_id == query_params.last_contact_record_id)
+                if query_params.last_contact_time_start:
+                    conditions.append(Lead.last_contact_time >= query_params.last_contact_time_start)
+                if query_params.last_contact_time_end:
+                    conditions.append(Lead.last_contact_time <= query_params.last_contact_time_end)
+                if query_params.last_analysis_failed_record_id:
+                    conditions.append(Lead.last_analysis_failed_record_id == query_params.last_analysis_failed_record_id)
+                if query_params.last_analysis_failed_time_start:
+                    conditions.append(Lead.last_analysis_failed_time >= query_params.last_analysis_failed_time_start)
+                if query_params.last_analysis_failed_time_end:
+                    conditions.append(Lead.last_analysis_failed_time <= query_params.last_analysis_failed_time_end)
+
+                # 时间范围查询
                 if query_params.created_at_start:
                     conditions.append(Lead.created_at >= query_params.created_at_start)
-
                 if query_params.created_at_end:
                     conditions.append(Lead.created_at <= query_params.created_at_end)
+                if query_params.updated_at_start:
+                    conditions.append(Lead.updated_at >= query_params.updated_at_start)
+                if query_params.updated_at_end:
+                    conditions.append(Lead.updated_at <= query_params.updated_at_end)
 
                 # 搜索关键词
                 if query_params.search:
@@ -100,6 +166,8 @@ class LeadService(BaseService):
                         Lead.customer_name.like(f"%{query_params.search}%"),
                         Lead.customer_phone.like(f"%{query_params.search}%"),
                         Lead.lead_no.like(f"%{query_params.search}%"),
+                        Lead.customer_wechat_name.like(f"%{query_params.search}%"),
+                        Lead.customer_wechat_number.like(f"%{query_params.search}%"),
                     )
                     conditions.append(search_conditions)
 
@@ -109,7 +177,7 @@ class LeadService(BaseService):
                     query = query.where(and_(*conditions))
 
                 # 获取总数
-                count_query = select(text("COUNT(*)"))  # pylint: disable=not-callable
+                count_query = select(func.count()).select_from(Lead) # pylint: disable=not-callable
                 if conditions:
                     count_query = count_query.where(and_(*conditions))
 
@@ -120,7 +188,17 @@ class LeadService(BaseService):
                 # 分页查询
                 offset = (query_params.page - 1) * query_params.size
                 query = query.offset(offset).limit(query_params.size)
-                query = query.order_by(Lead.created_at.desc())
+
+                # 动态排序
+                try:
+                    sort_field = getattr(Lead, query_params.sort_field)
+                except AttributeError:
+                    sort_field = Lead.created_at
+
+                if query_params.sort_order == "asc":
+                    query = query.order_by(sort_field.asc())
+                else:
+                    query = query.order_by(sort_field.desc())
 
                 result = await db_session.execute(query)
                 leads: Sequence[Lead] = result.scalars().all()
@@ -144,14 +222,6 @@ class LeadService(BaseService):
         """创建线索"""
         async with self.database.get_session() as db_session:
             try:
-                # 检查线索编号是否已存在
-                existing_lead = await self._get_lead_by_lead_no_with_session(
-                    db_session, lead_data.lead_no
-                )
-                if existing_lead:
-                    raise ValueError(f"线索编号 {lead_data.lead_no} 已存在")
-
-                # 创建新线索
                 lead = Lead(**lead_data.model_dump())
                 db_session.add(lead)
                 await db_session.commit()
@@ -172,14 +242,6 @@ class LeadService(BaseService):
                 lead = await self._get_lead_by_id_with_session(db_session, lead_id)
                 if not lead:
                     return None
-
-                # 如果更新线索编号，检查是否重复
-                if lead_data.lead_no and lead_data.lead_no != lead.lead_no:
-                    existing_lead = await self._get_lead_by_lead_no_with_session(
-                        db_session, lead_data.lead_no
-                    )
-                    if existing_lead:
-                        raise ValueError(f"线索编号 {lead_data.lead_no} 已存在")
 
                 # 更新字段
                 update_data = lead_data.model_dump(exclude_unset=True)
@@ -250,42 +312,6 @@ class LeadService(BaseService):
                 logger.error("根据分类ID获取线索失败: %s", e)
                 return []
 
-    async def get_leads_by_status(
-        self,
-        call_status_id: Optional[int] = None,
-        wechat_status_id: Optional[int] = None,
-        schedule_status_id: Optional[int] = None,
-        contract_status_id: Optional[int] = None,
-        limit: int = 10,
-    ) -> Sequence[Lead]:
-        """根据状态获取线索列表"""
-        async with self.database.get_session() as db_session:
-            try:
-                conditions = []
-
-                if call_status_id is not None:
-                    conditions.append(Lead.call_status_id == call_status_id)
-                if wechat_status_id is not None:
-                    conditions.append(Lead.wechat_status_id == wechat_status_id)
-                if schedule_status_id is not None:
-                    conditions.append(Lead.schedule_status_id == schedule_status_id)
-                if contract_status_id is not None:
-                    conditions.append(Lead.contract_status_id == contract_status_id)
-
-                query = select(Lead)
-                if conditions:
-                    query = query.where(and_(*conditions))
-
-                query = query.order_by(Lead.created_at.desc()).limit(limit)
-
-                result = await db_session.execute(query)
-                return result.scalars().all()
-
-            except Exception as e:  # pylint: disable=broad-except
-                logger.error("根据状态获取线索失败: %s", e)
-                return []
-
-    # 私有辅助方法，避免重复代码
     async def _get_lead_by_id_with_session(
         self, db_session: AsyncSession, lead_id: int
     ) -> Optional[Lead]:
@@ -304,17 +330,38 @@ class LeadService(BaseService):
         """获取状态映射配置"""
         async with self.database.get_session() as db_session:
             try:
+                # 先检查视图是否存在，如果不存在则返回空列表
+                check_view_query = text("""
+                    SELECT COUNT(*) as count 
+                    FROM information_schema.views 
+                    WHERE table_schema = DATABASE() 
+                    AND table_name = 'view_lead_status_mapping'
+                """)
+
+                view_check = await db_session.execute(check_view_query)
+                view_exists = view_check.scalar()
+
+                if not view_exists:
+                    logger.warning("视图 view_lead_status_mapping 不存在，返回空列表")
+                    return []
+
                 query = text("""
                     SELECT 
                         status_type,
                         type_name,
-                        value,
-                        code,
-                        label,
-                        parent_id,
-                        sort_order
-                    FROM v_frontend_status_mapping
-                    ORDER BY status_type, parent_id IS NOT NULL, sort_order
+                        JSON_ARRAYAGG(
+                            JSON_OBJECT(
+                                'status_id', status_id,
+                                'status_code', status_code,
+                                'status_name', status_name,
+                                'parent_id', parent_id,
+                                'sort_order', sort_order,
+                                'is_active', is_active
+                            )
+                        ) as status_list
+                    FROM view_lead_status_mapping
+                    GROUP BY status_type, type_name
+                    ORDER BY status_type
                 """)
 
                 result = await db_session.execute(query)
@@ -324,15 +371,11 @@ class LeadService(BaseService):
                     {
                         "status_type": row.status_type,
                         "type_name": row.type_name,
-                        "value": row.value,
-                        "code": row.code,
-                        "label": row.label,
-                        "parent_id": row.parent_id,
-                        "sort_order": row.sort_order
+                        "status_list": json.loads(row.status_list) if row.status_list else []
                     }
                     for row in rows
                 ]
 
-            except Exception as e:
+            except Exception as e:  # pylint: disable=broad-except
                 logger.error("获取状态映射失败: %s", e)
-                raise
+                return []

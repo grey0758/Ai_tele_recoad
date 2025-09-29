@@ -21,6 +21,7 @@ from app.db.database import Database
 from app.services.aibox_service import Aiboxservice
 from app.services.base_service import BaseService
 from app.services.scheduled_tasks_service import ScheduledTasksService
+from app.core.config import settings
 from app.core.logger import get_logger
 
 logger = get_logger(__name__)
@@ -209,7 +210,7 @@ class SchedulerService(BaseService):
                 if (
                     task.is_active
                     and task.cron_expression
-                    and task.task_type == "data_sync_service"
+                    and task.task_type == settings.task_type
                 ):
                     try:
                         trigger = CronTrigger.from_crontab(task.cron_expression)

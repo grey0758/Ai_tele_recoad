@@ -74,4 +74,7 @@ class Settings(BaseSettings):
     persistence_path: str = Field(default="./logs/events", description="Path for event persistence")
     model_config = SettingsConfigDict(env_file=".env", arbitrary_types_allowed=True)
 
+    # Scheduler Configuration
+    task_type: str = Field(default="data_sync_service", description="Task type")
+
 settings = Settings()

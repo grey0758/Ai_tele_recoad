@@ -7,13 +7,15 @@
 """
 from contextlib import asynccontextmanager
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import JSONResponse
 from app.core.config import settings
 from app.api.v1.api import api_router
 from app.core.dependencies import service_container, check_services_health
 from app.middleware.logging import logging_middleware
+from app.schemas.base import ResponseBuilder
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
@@ -63,6 +65,29 @@ app.include_router(api_router, prefix="/api/v1")
 
 # 添加静态文件服务
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(_request: Request, exc: HTTPException):
+    """HTTP异常处理器 - 统一使用ResponseBuilder格式"""
+    response_data = ResponseBuilder.error(
+        message=exc.detail,
+        code=exc.status_code
+    )
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=response_data.model_dump()
+    )
+
+
+@app.exception_handler(Exception)
+async def general_exception_handler(_request: Request, exc: Exception):
+    """通用异常处理器 - 统一使用ResponseBuilder格式"""
+    response_data = ResponseBuilder.internal_error(f"服务器内部错误: {str(exc)}")
+    return JSONResponse(
+        status_code=500,
+        content=response_data.model_dump()
+    )
 
 
 @app.get("/")

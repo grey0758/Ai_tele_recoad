@@ -44,3 +44,9 @@ class ForbiddenException(AITeleException):
     """禁止访问异常"""
     def __init__(self, detail: str = "Forbidden"):
         super().__init__(status_code=status.HTTP_403_FORBIDDEN, detail=detail)
+
+
+class ExternalRequestException(AITeleException):
+    """外部请求异常"""
+    def __init__(self, detail: str = "External request failed"):
+        super().__init__(status_code=status.HTTP_502_BAD_GATEWAY, detail=detail)

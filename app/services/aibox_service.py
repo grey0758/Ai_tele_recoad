@@ -12,7 +12,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.events import Event, EventType
 from app.core.event_bus import ProductionEventBus
 from app.db.database import Database
-from app.schemas.base import ResponseBuilder, ResponseCode, ResponseData
 from app.services.base_service import BaseService
 from app.models.advisor_call_duration_stats import (
     AdvisorCallDurationStats,
@@ -21,8 +20,10 @@ from app.models.advisor_call_duration_stats import (
 from app.schemas.advisor_call_duration_stats import (
     AdvisorCallDurationStatsUpdateRequestWithDeviceIdAndStatsDate,
 )
+from app.models.events import EventPriority
 from app.core.logger import get_logger
 from app.core.config import settings
+from app.core.exceptions import ExternalRequestException
 
 logger = get_logger(__name__)
 
@@ -40,7 +41,7 @@ class Aiboxservice(BaseService):
 
     async def register_event_listeners(self):
         """注册事件监听器"""
-        await self._register_listener(EventType.SEND_ADVISOR_STATS_WECHAT_REPORT_TASK, self.send_advisor_stats_wechat_report_task)
+        await self._register_listener(EventType.SEND_ADVISOR_STATS_WECHAT_REPORT_TASK, self.send_advisor_stats_wechat_report_task, priority=EventPriority.HIGH)
 
     async def upsert_advisor_call_duration_stats(
         self, stats_data: AdvisorCallDurationStatsUpdateRequestWithDeviceIdAndStatsDate
@@ -200,7 +201,7 @@ class Aiboxservice(BaseService):
 
     async def send_wechat_message(
         self, to_wxid: str, message: str, authorization_token: str = ""
-    ) -> bool:
+    ) -> str:
         """
         发送微信消息
 
@@ -210,7 +211,7 @@ class Aiboxservice(BaseService):
             authorization_token: 授权令牌
 
         Returns:
-            bool: 发送是否成功
+            str: 发送是否成功
         """
         url = settings.wechat_bot_url
 
@@ -234,32 +235,31 @@ class Aiboxservice(BaseService):
                 )
 
                 if response.status_code == 200:
-                    logger.info("微信消息发送成功: to_wxid=%s", to_wxid)
-                    return True
+                    message = f"微信消息发送成功: to_wxid={to_wxid}"
+                    logger.info(message)
+                    return message
                 else:
-                    logger.error(
-                        "微信消息发送失败: status_code=%d, response=%s",
-                        response.status_code,
-                        response.text,
-                    )
-                    return False
+                    error_message = f"微信消息发送失败: status_code={response.status_code}, response={response.text}"
+                    logger.error(error_message)
+                    raise ExternalRequestException(error_message)
 
-        except httpx.TimeoutException:
-            logger.error("微信消息发送超时: to_wxid=%s", to_wxid)
-            return False
         except Exception as e:  # pylint: disable=broad-except
-            logger.error("微信消息发送异常: to_wxid=%s, error=%s", to_wxid, str(e))
-            return False
+            error_message = f"微信消息发送异常: to_wxid={to_wxid}, error={str(e)}"
+            logger.error(error_message)
+            raise ExternalRequestException(error_message) from e
 
     # 发送顾问时长统计微信播报定时任务
-    async def send_advisor_stats_wechat_report_task(self, _event: Event) -> ResponseData[None]:
+    async def send_advisor_stats_wechat_report_task(self, _event: Event) -> str:
         """发送顾问时长统计微信播报定时任务"""
         stats_list = await self.get_all_advisor_stats_by_date(date.today())
         logger.info("发送顾问时长统计微信播报定时任务，共获取到 %d 条记录", len(stats_list))
 
-        # 过滤掉 total_duration 为 0 或大于等于7200的顾问记录
-        filtered_stats_list = [stats for stats in stats_list if 0 < stats.total_duration < 7200]
-        logger.info("过滤后剩余 %d 条记录（已排除 total_duration 为 0 或大于等于7200的记录）", len(filtered_stats_list))
+        # 检查并更新指标完成状态
+        await self._check_and_update_goal_completion(stats_list)
+
+        # 过滤出未完成指标的顾问记录
+        filtered_stats_list = [stats for stats in stats_list if not stats.goal_completed_today]
+        logger.info("过滤后剩余 %d 条记录（未完成指标的顾问）", len(filtered_stats_list))
 
         # 记录每个顾问的统计信息
         for stats in stats_list:
@@ -274,45 +274,54 @@ class Aiboxservice(BaseService):
 
         # 如果过滤后没有记录，则不播报
         if not filtered_stats_list:
-            logger.info("所有顾问的 total_duration 都为 0或大于等于7200，跳过微信播报发送")
-            return ResponseBuilder.success(
-                data=None,
-                message="所有顾问的 total_duration 都为 0或大于等于7200，跳过微信播报发送"
-            )
+            message = "所有顾问的指标都已完成，跳过微信播报发送"
+            logger.info(message)
+            return message
 
         # 生成微信播报消息
         msg_lines = ["=== 顾问待打时长统计 ==="]
         for stats in filtered_stats_list:
-            # 计算待打时长（假设目标时长是120分钟）
-            target_duration_minutes = 120
+            # 计算待打时长
+            target_duration_minutes = stats.goal / 60  # 转换为分钟
             current_duration_minutes = stats.total_duration / 60  # 转换为分钟
             remaining_minutes = max(
                 0, target_duration_minutes - current_duration_minutes
             )
 
             msg_lines.append(f"\n顾问: {stats.advisor_name}")
-            msg_lines.append(f"目标时长：{target_duration_minutes}分钟")
+            msg_lines.append(f"目标时长：{target_duration_minutes:.0f}分钟")
+            msg_lines.append(f"当前时长：{current_duration_minutes:.1f}分钟")
             msg_lines.append(f"待打：{remaining_minutes:.1f}分钟")
 
         msg = "\n".join(msg_lines)
         logger.info("生成的微信播报消息:\n%s", msg)
 
-        success = await self.send_wechat_message(
+        message = await self.send_wechat_message(
             to_wxid=settings.wechat_default_wxid,
             message=msg,
             authorization_token=settings.wechat_bot_token,
             )
 
-        if success:
-            logger.info("顾问时长统计微信播报发送成功")
-            return ResponseBuilder.success(
-                data=None,
-                message="顾问时长统计微信播报发送成功"
-            )
-        else:
-            logger.error("顾问时长统计微信播报发送失败")
-            return ResponseBuilder.error(
-                data=None,
-                message="顾问时长统计微信播报发送失败",
-                code=ResponseCode.INTERNAL_ERROR
-            )
+        return message
+
+    async def _check_and_update_goal_completion(self, stats_list: list[AdvisorCallDurationStats]) -> None:
+        """检查并更新指标完成状态"""
+        async with self.database.get_session() as db_session:
+            try:
+                for stats in stats_list:
+                    # 检查是否达到指标且未标记为完成
+                    if stats.total_duration >= stats.goal and not stats.goal_completed_today:
+                        # 更新指标完成状态
+                        stats.goal_completed_today = True
+                        await db_session.commit()
+                        logger.info(
+                            "顾问 %s (ID: %d) 指标已完成，总时长: %d秒，目标: %d秒",
+                            stats.advisor_name,
+                            stats.advisor_id,
+                            stats.total_duration,
+                            stats.goal
+                        )
+            except Exception as e:
+                await db_session.rollback()
+                logger.error("更新指标完成状态失败: %s", e)
+                raise

@@ -18,22 +18,6 @@ class ResponseData(BaseModel, Generic[T]):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
 
-# 常用的具体响应类型
-class SuccessResponse(ResponseData[T], Generic[T]):
-    """成功响应"""
-
-    code: Annotated[int, Field(default=200, description="成功状态码")]
-    message: Annotated[str, Field(default="操作成功", description="成功消息")]
-
-
-class ErrorResponse(ResponseData[None]):
-    """错误响应"""
-
-    code: Annotated[int, Field(description="错误状态码")]
-    data: Annotated[None, Field(default=None, description="错误时数据为空")]
-    message: Annotated[str, Field(description="错误消息")]
-
-
 # 分页信息模型
 class PaginationInfo(BaseModel):
     """分页信息"""
@@ -77,7 +61,7 @@ class ResponseBuilder:
     """响应构造器"""
 
     @staticmethod
-    def success(data: T, message: str = "操作成功", code: int = 200) -> ResponseData[T]:
+    def success(data: T, message: str = "操作成功", code: int = 0) -> ResponseData[T]:
         """构造成功响应"""
         return ResponseData[T](code=code, data=data, message=message)
 

@@ -6,7 +6,7 @@
 
 from typing import List
 from datetime import date
-from fastapi import APIRouter, Depends, Query, Path
+from fastapi import APIRouter, Depends, HTTPException, Query, Path
 
 from app.services.aibox_service import Aiboxservice
 from app.schemas.advisor_call_duration_stats import (
@@ -44,9 +44,7 @@ async def upsert_advisor_call_duration_stats(
 
     except Exception as e:  # pylint: disable=broad-except
         logger.error("更新或插入顾问通话时长统计失败: %s", e)
-        return ResponseBuilder.error(
-            f"更新或插入顾问通话时长统计失败: {str(e)}", ResponseCode.INTERNAL_ERROR
-        )
+        raise HTTPException(status_code=ResponseCode.INTERNAL_ERROR, detail=f"更新或插入顾问通话时长统计失败: {str(e)}") from e
 
 
 @router.get(
@@ -155,10 +153,11 @@ async def trigger_advisor_stats_wechat_report(
 
     不需要任何输入参数，直接调用即可触发微信播报任务
     """
-    #直接返回ResponseData[None]
-    return await aibox_service.emit_event(
+    #返回str
+    message = await aibox_service.emit_event(
             EventType.SEND_ADVISOR_STATS_WECHAT_REPORT_TASK,
             data=None,
             wait_for_result=True,
             max_retries=0,
         )
+    return ResponseBuilder.success(None, message)

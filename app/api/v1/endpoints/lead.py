@@ -4,8 +4,7 @@
 提供线索相关的 REST API 接口
 """
 
-from typing import List, Optional
-from datetime import datetime
+from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Query, Path
 
 from app.services.lead_service import LeadService
@@ -15,97 +14,69 @@ from app.schemas.lead import (
     LeadResponse,
     LeadListResponse,
     LeadQueryParams,
+    StatusMappingResponse,
 )
 from app.core.dependencies import get_lead_service
 from app.core.logger import get_logger
-from app.schemas.base import ResponseBuilder, ResponseData
+from app.schemas.base import ResponseCode, ResponseBuilder, ResponseData
 
 logger = get_logger(__name__)
 
 router = APIRouter()
 
 
-@router.get("/leads", response_model=LeadListResponse, summary="获取线索列表")
-async def get_leads(
-    page: int = Query(1, ge=1, description="页码，从1开始"),
-    size: int = Query(10, ge=1, le=100, description="每页数量，最大100"),
-    category_id: Optional[int] = Query(None, description="线索类型ID"),
-    advisor_id: Optional[int] = Query(None, description="顾问ID"),
-    customer_phone: Optional[str] = Query(None, description="客户电话"),
-    call_status_id: Optional[int] = Query(None, description="电话状态ID"),
-    wechat_status_id: Optional[int] = Query(None, description="微信状态ID"),
-    created_at_start: Optional[str] = Query(
-        None, description="创建时间开始 (YYYY-MM-DD)"
-    ),
-    created_at_end: Optional[str] = Query(
-        None, description="创建时间结束 (YYYY-MM-DD)"
-    ),
-    search: Optional[str] = Query(
-        None, description="搜索关键词（客户姓名、电话、线索编号）"
-    ),
+@router.post("/lead/search", response_model=ResponseData[LeadListResponse], summary="搜索线索列表")
+async def search_leads(
+    query_params: LeadQueryParams,
     lead_service: LeadService = Depends(get_lead_service),
 ):
     """
-    获取线索列表
+    搜索线索列表
 
-    支持分页查询和多种筛选条件：
-    - 按线索类型筛选
-    - 按顾问筛选
-    - 按客户电话筛选
-    - 按状态筛选
-    - 按创建时间范围筛选
-    - 关键词搜索
+    支持全面的查询条件：
+    - 基础分类信息：线索类型、子类型
+    - 分配信息：顾问组、顾问
+    - 客户基础信息：姓名、电话、邮箱、微信等
+    - 状态查询：电话、微信、私域、日程、合同状态（主状态+子状态）
+    - 分析字段：联系次数、时间范围等
+    - 时间范围查询：创建时间、更新时间
+    - 关键词搜索：客户姓名、电话、线索编号、微信昵称、微信号码
+    - 动态排序：支持按任意字段排序
     """
     try:
-        # 处理日期时间参数
-        created_at_start_dt = None
-        created_at_end_dt = None
-
-        if created_at_start:
-            try:
-                created_at_start_dt = datetime.fromisoformat(created_at_start)
-            except ValueError as e:
-                raise HTTPException(
-                    status_code=400,
-                    detail="创建时间开始格式错误，请使用 YYYY-MM-DD 格式",
-                ) from e
-
-        if created_at_end:
-            try:
-                created_at_end_dt = datetime.fromisoformat(created_at_end)
-            except ValueError as e:
-                raise HTTPException(
-                    status_code=400,
-                    detail="创建时间结束格式错误，请使用 YYYY-MM-DD 格式",
-                ) from e
-
-        # 构建查询参数
-        query_params = LeadQueryParams(
-            page=page,
-            size=size,
-            category_id=category_id,
-            advisor_id=advisor_id,
-            customer_phone=customer_phone,
-            call_status_id=call_status_id,
-            wechat_status_id=wechat_status_id,
-            created_at_start=created_at_start_dt,
-            created_at_end=created_at_end_dt,
-            search=search,
-        )
-
         result = await lead_service.get_leads_with_pagination(query_params)
-        return result
+        return ResponseBuilder.success(result)
 
     except Exception as e:
-        logger.error("获取线索列表失败: %s", e)
-        raise HTTPException(status_code=500, detail=f"获取线索列表失败: {str(e)}") from e
+        logger.error("搜索线索列表失败: %s", e)
+        raise HTTPException(status_code=ResponseCode.INTERNAL_ERROR, detail=f"搜索线索列表失败: {str(e)}") from e
 
 
-@router.get("/leads/{lead_id}", response_model=LeadResponse, summary="根据ID获取线索")
-async def get_lead_by_id(
-    lead_id: int = Path(..., description="线索ID"),
-    lead_service: LeadService = Depends(get_lead_service),
+@router.get("/lead/status-mapping", summary="获取状态映射配置", response_model=ResponseData[List[StatusMappingResponse]])
+async def get_status_mapping(
+    lead_service: LeadService = Depends(get_lead_service)
 ):
+    """
+    获取所有状态映射配置
+    
+    返回所有状态类型的映射关系，包括：
+    - 电话状态
+    - 微信状态  
+    - 私域回看状态
+    - 私域参加状态
+    - 日程状态
+    - 合同状态
+    """
+    try:
+        result = await lead_service.get_status_mapping()
+        return ResponseBuilder.success(result)
+    except Exception as e:
+        logger.error("获取状态映射失败: %s", e)
+        raise HTTPException(status_code=500, detail=f"获取状态映射失败: {str(e)}") from e
+
+
+@router.get("/lead/{lead_id}", response_model= ResponseData[LeadResponse], summary="根据ID获取线索")
+async def get_lead_by_id(lead_id: int = Path(..., description="线索ID"), lead_service: LeadService = Depends(get_lead_service)):
     """
     根据ID获取线索详情
     """
@@ -114,7 +85,7 @@ async def get_lead_by_id(
         if not lead:
             raise HTTPException(status_code=404, detail="线索不存在")
 
-        return LeadResponse.model_validate(lead)
+        return ResponseBuilder.success(LeadResponse.model_validate(lead))
 
     except HTTPException:
         raise
@@ -123,15 +94,8 @@ async def get_lead_by_id(
         raise HTTPException(status_code=500, detail=f"获取线索详情失败: {str(e)}") from e
 
 
-@router.get(
-    "/leads/lead-no/{lead_no}",
-    response_model=LeadResponse,
-    summary="根据线索编号获取线索",
-)
-async def get_lead_by_lead_no(
-    lead_no: str = Path(..., description="线索编号"),
-    lead_service: LeadService = Depends(get_lead_service),
-):
+@router.get("/lead/lead-no/{lead_no}", response_model=LeadResponse, summary="根据线索编号获取线索",)
+async def get_lead_by_lead_no(lead_no: str = Path(..., description="线索编号"), lead_service: LeadService = Depends(get_lead_service)):
     """
     根据线索编号获取线索详情
     """
@@ -151,7 +115,7 @@ async def get_lead_by_lead_no(
         ) from e
 
 
-@router.post("/leads", response_model=LeadResponse, summary="创建线索")
+@router.post("/lead", response_model=LeadResponse, summary="创建线索")
 async def create_lead(
     lead_data: LeadCreate, lead_service: LeadService = Depends(get_lead_service)
 ):
@@ -169,7 +133,7 @@ async def create_lead(
         raise HTTPException(status_code=500, detail=f"创建线索失败: {str(e)}") from e
 
 
-@router.put("/leads/{lead_id}", response_model=LeadResponse, summary="更新线索")
+@router.put("/lead/{lead_id}", response_model=LeadResponse, summary="更新线索")
 async def update_lead(
     lead_data: LeadUpdate,
     lead_id: int = Path(..., description="线索ID"),
@@ -194,7 +158,7 @@ async def update_lead(
         raise HTTPException(status_code=500, detail=f"更新线索失败: {str(e)}") from e
 
 
-@router.delete("/leads/{lead_id}", summary="删除线索")
+@router.delete("lead/{lead_id}", summary="删除线索")
 async def delete_lead(
     lead_id: int = Path(..., description="线索ID"),
     lead_service: LeadService = Depends(get_lead_service),
@@ -216,16 +180,8 @@ async def delete_lead(
         raise HTTPException(status_code=500, detail=f"删除线索失败: {str(e)}") from e
 
 
-@router.get(
-    "/leads/advisor/{advisor_id}",
-    response_model=List[LeadResponse],
-    summary="根据顾问ID获取线索",
-)
-async def get_leads_by_advisor(
-    advisor_id: int = Path(..., description="顾问ID"),
-    limit: int = Query(10, ge=1, le=100, description="返回数量限制"),
-    lead_service: LeadService = Depends(get_lead_service),
-):
+@router.get("/lead/advisor/{advisor_id}", response_model=List[LeadResponse], summary="根据顾问ID获取线索",)
+async def get_leads_by_advisor(advisor_id: int = Path(..., description="顾问ID"), limit: int = Query(10, ge=1, le=100, description="返回数量限制"), lead_service: LeadService = Depends(get_lead_service)):
     """
     根据顾问ID获取线索列表
     """
@@ -238,11 +194,7 @@ async def get_leads_by_advisor(
         raise HTTPException(status_code=500, detail=f"根据顾问ID获取线索失败: {str(e)}") from e
 
 
-@router.get(
-    "/leads/category/{category_id}",
-    response_model=List[LeadResponse],
-    summary="根据分类ID获取线索",
-)
+@router.get("/lead/category/{category_id}", response_model=List[LeadResponse], summary="根据分类ID获取线索",)
 async def get_leads_by_category(
     category_id: int = Path(..., description="分类ID"),
     limit: int = Query(10, ge=1, le=100, description="返回数量限制"),
@@ -258,57 +210,3 @@ async def get_leads_by_category(
     except Exception as e:
         logger.error("根据分类ID获取线索失败: %s", e)
         raise HTTPException(status_code=500, detail=f"根据分类ID获取线索失败: {str(e)}") from e
-
-
-@router.get(
-    "/leads/status", response_model=List[LeadResponse], summary="根据状态获取线索"
-)
-async def get_leads_by_status(
-    call_status_id: Optional[int] = Query(None, description="电话状态ID"),
-    wechat_status_id: Optional[int] = Query(None, description="微信状态ID"),
-    schedule_status_id: Optional[int] = Query(None, description="日程状态ID"),
-    contract_status_id: Optional[int] = Query(None, description="合同状态ID"),
-    limit: int = Query(10, ge=1, le=100, description="返回数量限制"),
-    lead_service: LeadService = Depends(get_lead_service),
-):
-    """
-    根据状态获取线索列表
-
-    可以按一个或多个状态进行筛选
-    """
-    try:
-        leads = await lead_service.get_leads_by_status(
-            call_status_id=call_status_id,
-            wechat_status_id=wechat_status_id,
-            schedule_status_id=schedule_status_id,
-            contract_status_id=contract_status_id,
-            limit=limit,
-        )
-        return [LeadResponse.model_validate(lead) for lead in leads]
-
-    except Exception as e:
-        logger.error("根据状态获取线索失败: %s", e)
-        raise HTTPException(status_code=500, detail=f"根据状态获取线索失败: {str(e)}") from e
-
-
-@router.get("/leads/status-mapping", response_model=ResponseData[list], summary="获取状态映射配置")
-async def get_status_mapping(
-    lead_service: LeadService = Depends(get_lead_service)
-):
-    """
-    获取所有状态映射配置
-    
-    返回所有状态类型的映射关系，包括：
-    - 电话状态
-    - 微信状态  
-    - 私域回看状态
-    - 私域参加状态
-    - 日程状态
-    - 合同状态
-    """
-    try:
-        result = await lead_service.get_status_mapping()
-        return ResponseBuilder.success(result, "获取状态映射成功")
-    except Exception as e:
-        logger.error("获取状态映射失败: %s", e)
-        raise HTTPException(status_code=500, detail=f"获取状态映射失败: {str(e)}") from e

@@ -61,7 +61,7 @@ class Database:
             # 创建异步引擎
             self.engine = create_async_engine(
                 database_url,
-                echo=settings.debug,
+                echo=False,
                 pool_size=20,
                 max_overflow=30,
                 pool_pre_ping=True,
