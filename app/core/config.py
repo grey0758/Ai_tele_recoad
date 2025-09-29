@@ -75,6 +75,6 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", arbitrary_types_allowed=True)
 
     # Scheduler Configuration
-    task_type: str = Field(default="data_sync", description="Task type")
+    task_type: str = Field(default="data_sync_service", description="Task type")
 
 settings = Settings()
