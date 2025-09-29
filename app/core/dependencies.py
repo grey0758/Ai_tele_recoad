@@ -14,7 +14,7 @@ from app.services.lead_service import LeadService
 from app.services.upload_record_service import FileService
 from app.services.aibox_service import Aiboxservice
 from app.services.scheduled_tasks_service import ScheduledTasksService
-from app.services.scheduler_service import SchedulerService
+from app.core.scheduler_service import SchedulerService
 from app.db.database import Database
 
 logger = get_logger(__name__)
