@@ -72,6 +72,10 @@ class AdvisorCallDurationStats(Base):
     inbound_duration_45s_to_60s: Mapped[int] = mapped_column(BigInteger, default=0, comment="呼入通话时长45-60秒")
     inbound_duration_over_60s: Mapped[int] = mapped_column(BigInteger, default=0, comment="呼入通话时长大于60秒")
 
+    # 指标相关字段
+    goal: Mapped[int] = mapped_column(BigInteger, default=7200, comment="今日指标")
+    goal_completed_today: Mapped[bool] = mapped_column(default=False, comment="今天是否完成指标")
+
     # 时间字段
     created_at: Mapped[datetime] = mapped_column(default=datetime.now, comment="创建时间")
     updated_at: Mapped[datetime] = mapped_column(default=datetime.now, onupdate=datetime.now, comment="更新时间")
@@ -94,6 +98,7 @@ class AdvisorDeviceConfig(Base):
     device_id: Mapped[str] = mapped_column(String(50), nullable=False, comment="设备ID")
     advisor_id: Mapped[int] = mapped_column(SmallInteger, nullable=False, comment="顾问ID")
     advisor_name: Mapped[str] = mapped_column(String(50), nullable=False, comment="顾问姓名")
+    goal: Mapped[int] = mapped_column(nullable=False, default=7200, comment="指标")
 
     # 时间字段
     created_at: Mapped[datetime] = mapped_column(server_default=func.now(), comment="创建时间") # pylint: disable=not-callable

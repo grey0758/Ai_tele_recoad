@@ -54,13 +54,14 @@ class Aiboxservice(BaseService):
         async with self.database.get_session() as db_session:
             try:
                 # 通过设备ID获取顾问ID和顾问姓名
-                advisor_id, advisor_name = await self._get_advisor_id_by_device_id(
+                advisor_id, advisor_name, goal = await self._get_advisor_id_by_device_id(
                     db_session, stats_data.device_id
                 )
                 if not advisor_id and not advisor_name:
                     raise ValueError(f"设备ID {stats_data.device_id} 对应的顾问ID和顾问姓名不存在")
                 stats_data.advisor_id = advisor_id
                 stats_data.advisor_name = advisor_name
+                stats_data.goal = goal
 
                 # 检查记录是否存在
                 existing_stats = await self._get_stats_by_advisor_and_date(
@@ -187,17 +188,17 @@ class Aiboxservice(BaseService):
 
     async def _get_advisor_id_by_device_id(
         self, db_session: AsyncSession, device_id: str
-    ) -> tuple[int, str]:
+    ) -> tuple[int, str, int]:
         """根据设备ID获取顾问ID和顾问姓名"""
         result = await db_session.execute(
             select(
-                AdvisorDeviceConfig.advisor_id, AdvisorDeviceConfig.advisor_name
+                AdvisorDeviceConfig.advisor_id, AdvisorDeviceConfig.advisor_name, AdvisorDeviceConfig.goal
             ).where(AdvisorDeviceConfig.device_id == device_id)
         )
         row = result.first()
         if row:
-            return (row.advisor_id, row.advisor_name)
-        return (0, "")
+            return (row.advisor_id, row.advisor_name, row.goal)
+        return (0, "", 0)
 
     async def send_wechat_message(
         self, to_wxid: str, message: str, authorization_token: str = ""

@@ -65,6 +65,10 @@ class AdvisorCallDurationStatsBase(BaseModel):
     inbound_duration_45s_to_60s: Annotated[int, Field(default=0, description="呼入通话时长45-60秒")]
     inbound_duration_over_60s: Annotated[int, Field(default=0, description="呼入通话时长大于60秒")]
 
+    # 指标相关字段
+    goal: Annotated[int, Field(default=7200, description="今日指标")]
+    goal_completed_today: Annotated[bool, Field(default=False, description="今天是否完成指标")]
+
 class AdvisorCallDurationStatsResponse(AdvisorCallDurationStatsBase):
     """顾问通话时长统计响应 Schema"""
     id : Annotated[int, Field(..., description="主键ID")]
@@ -124,6 +128,10 @@ class AdvisorCallDurationStatsUpsertRequest(BaseModel):
     inbound_duration_30s_to_45s: Annotated[Optional[int], Field(default=None, description="呼入通话时长30-45秒")]
     inbound_duration_45s_to_60s: Annotated[Optional[int], Field(default=None, description="呼入通话时长45-60秒")]
     inbound_duration_over_60s: Annotated[Optional[int], Field(default=None, description="呼入通话时长大于60秒")]
+
+    # 指标相关字段
+    goal: Annotated[Optional[int], Field(default=None, description="今日指标")]
+    goal_completed_today: Annotated[Optional[bool], Field(default=None, description="今天是否完成指标")]
 
 class AdvisorCallDurationStatsUpdateRequestWithDeviceIdAndStatsDate(AdvisorCallDurationStatsUpsertRequest):
     """顾问通话时长统计更新请求 Schema"""
