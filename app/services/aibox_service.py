@@ -255,12 +255,12 @@ class Aiboxservice(BaseService):
         stats_list = await self.get_all_advisor_stats_by_date(date.today())
         logger.info("发送顾问时长统计微信播报定时任务，共获取到 %d 条记录", len(stats_list))
 
-        # 检查并更新指标完成状态
-        await self._check_and_update_goal_completion(stats_list)
+        # 检查并更新指标完成状态，获取刚刚完成指标的顾问
+        newly_completed_stats = await self._check_and_update_goal_completion(stats_list)
 
-        # 过滤出未完成指标的顾问记录
-        filtered_stats_list = [stats for stats in stats_list if not stats.goal_completed_today]
-        logger.info("过滤后剩余 %d 条记录（未完成指标的顾问）", len(filtered_stats_list))
+        # 过滤出未完成指标的顾问记录，以及刚刚完成指标的顾问（用于播报）
+        filtered_stats_list = [stats for stats in stats_list if not stats.goal_completed_today] + newly_completed_stats
+        logger.info("过滤后剩余 %d 条记录（未完成指标的顾问 + 刚刚完成指标的顾问）", len(filtered_stats_list))
 
         # 记录每个顾问的统计信息
         for stats in stats_list:
@@ -305,24 +305,38 @@ class Aiboxservice(BaseService):
 
         return message
 
-    async def _check_and_update_goal_completion(self, stats_list: list[AdvisorCallDurationStats]) -> None:
-        """检查并更新指标完成状态"""
+    async def _check_and_update_goal_completion(self, stats_list: list[AdvisorCallDurationStats]) -> list[AdvisorCallDurationStats]:
+        """检查并更新指标完成状态，返回刚刚完成指标的顾问列表"""
+        newly_completed = []
         async with self.database.get_session() as db_session:
             try:
                 for stats in stats_list:
                     # 检查是否达到指标且未标记为完成
                     if stats.total_duration >= stats.goal and not stats.goal_completed_today:
-                        # 更新指标完成状态
-                        stats.goal_completed_today = True
-                        await db_session.commit()
-                        logger.info(
-                            "顾问 %s (ID: %d) 指标已完成，总时长: %d秒，目标: %d秒",
-                            stats.advisor_name,
-                            stats.advisor_id,
-                            stats.total_duration,
-                            stats.goal
+                        # 从当前会话中重新查询记录
+                        current_stats = await self._get_stats_by_advisor_and_date(
+                            db_session, stats.advisor_id, stats.stats_date
                         )
-                        stats.goal_completed_today = False
+                        if current_stats:
+                            # 更新指标完成状态
+                            current_stats.goal_completed_today = True
+                            newly_completed.append(stats)
+                            logger.info(
+                                "顾问 %s (ID: %d) 指标已完成，总时长: %d秒，目标: %d秒",
+                                stats.advisor_name,
+                                stats.advisor_id,
+                                stats.total_duration,
+                                stats.goal
+                            )
+
+                # 统一提交所有更新
+                await db_session.commit()
+
+                # 更新内存中的对象状态
+                for stats in newly_completed:
+                    stats.goal_completed_today = True
+
+                return newly_completed
             except Exception as e:
                 await db_session.rollback()
                 logger.error("更新指标完成状态失败: %s", e)

@@ -40,7 +40,7 @@ class Settings(BaseSettings):
     # WeChat Bot Configuration
     wechat_bot_url: str = Field(default="https://wxbot.da-mai.com/api/v1/wxbot/user/send", description="WeChat bot API URL")
     wechat_bot_token:str = Field(default="damai2025wxbot", description="WeChat bot authorization token")
-    wechat_default_wxid: str = Field(default="58065692621@chatroom", description="Default WeChat ID for notifications")
+    wechat_default_wxid: str = Field(default="50251377407@chatroom", description="Default WeChat ID for notifications")
 
     # CORS
     allowed_origins: List[str] = Field(default_factory=lambda: ["http://localhost:3000"], description="Allowed CORS origins")
