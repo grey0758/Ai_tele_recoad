@@ -322,6 +322,7 @@ class Aiboxservice(BaseService):
                             stats.total_duration,
                             stats.goal
                         )
+                        stats.goal_completed_today = False
             except Exception as e:
                 await db_session.rollback()
                 logger.error("更新指标完成状态失败: %s", e)
