@@ -146,4 +146,6 @@ cython_debug/
 logs/
 uploads/
 *.db
-*.sqlite
+*.sqliteu
+
+uv.lock
