@@ -37,7 +37,7 @@ async def get_scheduled_task(
         if not task:
             raise HTTPException(status_code=404, detail=f"任务ID {task_id} 不存在")
 
-        return ResponseBuilder.success(data=task, message="获取定时任务详情成功")
+        return ResponseBuilder.success(code=200, data=task, message="获取定时任务详情成功")
     except HTTPException:
         raise
     except Exception as e:  # pylint: disable=broad-except

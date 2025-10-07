@@ -1,6 +1,6 @@
 """配置类"""
 
-from typing import List, Optional
+from typing import List
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field
 
@@ -17,25 +17,25 @@ class Settings(BaseSettings):
     database_url: str = Field(default="sqlite:///./ai_tele.db", description="Database connection URL")
 
     # SSH Tunnel Configuration
-    ssh_host: Optional[str] = Field(default=None, description="SSH server host")
+    ssh_host: str | None = Field(default=None, description="SSH server host")
     ssh_port: int = Field(default=22, description="SSH server port")
-    ssh_username: Optional[str] = Field(default=None, description="SSH username")
-    ssh_password: Optional[str] = Field(default=None, description="SSH password")
-    ssh_key_path: Optional[str] = Field(default=None, description="SSH private key path")
+    ssh_username: str | None = Field(default=None, description="SSH username")
+    ssh_password: str | None = Field(default=None, description="SSH password")
+    ssh_key_path: str | None = Field(default=None, description="SSH private key path")
     ssh_remote_host: str = Field(default="localhost", description="Remote database host")
     ssh_remote_port: int = Field(default=3306, description="Remote database port")
     ssh_local_port: int = Field(default=3307, description="Local tunnel port")
 
     # Database
-    db_username: Optional[str] = Field(default=None, description="Database username")
-    db_password: Optional[str] = Field(default=None, description="Database password")
-    db_host: Optional[str] = Field(default=None, description="Database host")
-    db_port: Optional[str] = Field(default=None, description="Database port")
-    db_name: Optional[str] = Field(default=None, description="Database name")
+    db_username: str | None = Field(default=None, description="Database username")
+    db_password: str | None = Field(default=None, description="Database password")
+    db_host: str | None = Field(default=None, description="Database host")
+    db_port: str | None = Field(default=None, description="Database port")
+    db_name: str | None = Field(default=None, description="Database name")
 
     # OpenAI Configuration
-    openai_url: Optional[str] = Field(default=None, description="OpenAI URL")
-    openai_api_key: Optional[str] = Field(default=None, description="OpenAI API key")
+    openai_url: str | None = Field(default=None, description="OpenAI URL")
+    openai_api_key: str | None = Field(default=None, description="OpenAI API key")
 
     # WeChat Bot Configuration
     wechat_bot_url: str = Field(default="https://wxbot.da-mai.com/api/v1/wxbot/user/send", description="WeChat bot API URL")
@@ -57,7 +57,7 @@ class Settings(BaseSettings):
     redis_port: int = Field(default=6379, description="Redis port")
     redis_db: int = Field(default=0, description="Redis database")
     redis_username: str = Field(default="default", description="Redis username")
-    redis_password: Optional[str] = Field(default=None, description="Redis password")
+    redis_password: str | None = Field(default=None, description="Redis password")
     redis_ssl: bool = Field(default=False, description="Redis SSL")
     redis_decode_responses: bool = Field(default=True, description="Redis decode responses")
 
@@ -72,9 +72,16 @@ class Settings(BaseSettings):
     health_check_interval: int = Field(default=30, description="Health check interval in seconds")
     enable_persistence: bool = Field(default=True, description="Enable event persistence to disk")
     persistence_path: str = Field(default="./logs/events", description="Path for event persistence")
-    model_config = SettingsConfigDict(env_file=".env", arbitrary_types_allowed=True)
 
     # Scheduler Configuration
     task_type: str = Field(default="data_sync_service", description="Task type")
+
+    # COS Configuration
+    cos_secret_id: str | None = Field(default=None, description="COS Secret ID")
+    cos_secret_key: str | None = Field(default=None, description="COS Secret Key")
+    cos_region: str = Field(default="ap-guangzhou", description="COS Region")
+    cos_bucket: str | None = Field(default=None, description="COS Bucket")
+
+    model_config = SettingsConfigDict(env_file=".env", arbitrary_types_allowed=True)
 
 settings = Settings()

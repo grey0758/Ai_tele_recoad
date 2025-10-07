@@ -42,6 +42,7 @@ dependencies = [
     "aiomysql>=0.2.0",
     "mypy>=1.18.2",
     "types-aiofiles>=24.1.0.20250822",
+    "cos-python-sdk-v5>=1.9.38",
 ]
 
 [project.optional-dependencies]
@@ -114,5 +115,5 @@ dev = [
 module = "apscheduler.*"
 ignore_missing_imports = true
 
-[tool.pylint.MASTER]
+[tool.pylint]
 max-line-length = 200
