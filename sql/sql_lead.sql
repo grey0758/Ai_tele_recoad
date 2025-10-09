@@ -322,7 +322,7 @@ CREATE TABLE call_records (
     file_size BIGINT NOT NULL COMMENT '文件大小(字节)',
     file_name VARCHAR(255) NOT NULL COMMENT '文件路径',
     custom_id VARCHAR(100) DEFAULT '' COMMENT '自定义ID',
-    record_uuid VARCHAR(36) NOT NULL UNIQUE COMMENT '记录UUID',
+    record_uuid VARCHAR(36) UNIQUE COMMENT '记录UUID',
     upload_state TINYINT NOT NULL COMMENT '上传状态',
     
     -- 存储信息

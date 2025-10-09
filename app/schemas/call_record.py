@@ -34,7 +34,7 @@ class CallRecordCreate(BaseModel):
     file_size: int = Field(description="文件大小(字节)")
     file_name: str = Field(description="文件路径")
     custom_id: str = Field(default="", description="自定义ID")
-    record_uuid: str = Field(description="记录UUID")
+    record_uuid: Optional[str] = Field(default=None, description="记录UUID")
     upload_state: int = Field(description="上传状态")
 
     # 存储信息
@@ -116,7 +116,7 @@ class CallRecordResponse(BaseModel):
     file_size: int = Field(description="文件大小(字节)")
     file_name: str = Field(description="文件路径")
     custom_id: str = Field(description="自定义ID")
-    record_uuid: str = Field(description="记录UUID")
+    record_uuid: Optional[str] = Field(default=None, description="记录UUID")
     upload_state: int = Field(description="上传状态")
 
     # 存储信息

@@ -6,7 +6,7 @@
 
 from datetime import datetime
 from typing import Optional
-from sqlalchemy import BigInteger, String, DateTime, SmallInteger, Integer, Boolean, Text, JSON, Index, func
+from sqlalchemy import BigInteger, String, DateTime, SmallInteger, Integer, Boolean, Text, Index, func
 from sqlalchemy.orm import Mapped, mapped_column
 from app.db.database import Base
 
@@ -33,7 +33,7 @@ class CallRecordUpload(Base):
     file_size: Mapped[int] = mapped_column(BigInteger, nullable=False, comment="文件大小(字节)")
     file_name: Mapped[str] = mapped_column(String(255), nullable=False, comment="文件路径")
     custom_id: Mapped[str] = mapped_column(String(100), default="", comment="自定义ID")
-    record_uuid: Mapped[str] = mapped_column(String(36), unique=True, nullable=False, comment="记录UUID")
+    record_uuid: Mapped[str] = mapped_column(String(36), unique=True, comment="记录UUID")
     upload_state: Mapped[int] = mapped_column(SmallInteger, nullable=False, comment="上传状态")
 
     # 存储信息
@@ -47,7 +47,7 @@ class CallRecordUpload(Base):
     advisor_id: Mapped[Optional[int]] = mapped_column(SmallInteger, comment="通话顾问ID")
     advisor_group_id: Mapped[Optional[int]] = mapped_column(SmallInteger, comment="所属顾问组ID")
     advisor_group_sub_id: Mapped[Optional[int]] = mapped_column(SmallInteger, comment="所属顾问组子ID")
-    conversation_content: Mapped[Optional[dict]] = mapped_column(JSON, comment="对话记录：包含对话内容、关键信息提取、客户需求等")
+    conversation_content: Mapped[Optional[str]] = mapped_column(Text, comment="对话记录：包含对话内容、关键信息提取、客户需求等")
     call_summary: Mapped[Optional[str]] = mapped_column(Text, comment="通话总结：顾问填写的通话要点和后续跟进计划")
     call_quality_score: Mapped[Optional[int]] = mapped_column(SmallInteger, comment="通话质量评分：1-100分，用于质检评估")
     quality_notes: Mapped[Optional[str]] = mapped_column(Text, comment="质检备注：质检人员的评价和建议")
