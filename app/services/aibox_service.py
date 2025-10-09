@@ -17,6 +17,7 @@ from app.models.advisor_call_duration_stats import (
     AdvisorCallDurationStats,
     AdvisorDeviceConfig,
 )
+from app.models.advisors import Advisors
 from app.schemas.advisor_call_duration_stats import (
     AdvisorCallDurationStatsUpdateRequestWithDeviceIdAndStatsDate,
 )
@@ -374,10 +375,22 @@ class Aiboxservice(BaseService):
                 else:
                     # 如果不存在，创建新的advisor记录
                     # 首先获取下一个可用的advisor_id
-                    max_advisor_query = select(func.max(AdvisorDeviceConfig.advisor_id))
+                    max_advisor_query = select(func.max(Advisors.id))
                     max_result = await db_session.execute(max_advisor_query)
                     max_advisor_id = max_result.scalar() or 0
                     new_advisor_id = max_advisor_id + 1
+
+                    # 先创建advisors记录
+                    advisor = Advisors(
+                        id=new_advisor_id,
+                        group_id=2,  # 默认组ID
+                        sub_group_id=None,
+                        name=f"测试用户（{devid[:8]}）",  # 使用devid的前8位作为用户名
+                        status=1  # 在职状态
+                    )
+
+                    db_session.add(advisor)
+                    await db_session.flush()  # 刷新但不提交，确保advisor记录存在
 
                     # 创建新的设备配置记录
                     device_config = AdvisorDeviceConfig(
@@ -392,7 +405,7 @@ class Aiboxservice(BaseService):
                     await db_session.commit()
                     await db_session.refresh(device_config)
 
-                    logger.info("创建新的顾问设备配置成功: device_id=%s, devid=%s, advisor_id=%s",
+                    logger.info("创建新的顾问和设备配置成功: device_id=%s, devid=%s, advisor_id=%s", 
                               device_id, devid, new_advisor_id)
 
                 return device_config
