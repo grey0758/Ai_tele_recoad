@@ -50,8 +50,8 @@ class CallRecordCreate(BaseModel):
     advisor_group_sub_id: Optional[int] = Field(
         default=None, description="所属顾问组子ID"
     )
-    conversation_content: Optional[dict] = Field(
-        default=None, description="对话记录JSON"
+    conversation_content: Optional[str] = Field(
+        default=None, description="对话记录文本"
     )
     call_summary: Optional[str] = Field(default=None, description="通话总结")
     call_quality_score: Optional[int] = Field(default=None, description="通话质量评分")
@@ -91,8 +91,8 @@ class CallRecordUpdate(BaseModel):
     advisor_group_sub_id: Optional[int] = Field(
         default=None, description="所属顾问组子ID"
     )
-    conversation_content: Optional[dict] = Field(
-        default=None, description="对话记录JSON"
+    conversation_content: Optional[str] = Field(
+        default=None, description="对话记录文本"
     )
     call_summary: Optional[str] = Field(default=None, description="通话总结")
     call_quality_score: Optional[int] = Field(default=None, description="通话质量评分")
@@ -130,7 +130,7 @@ class CallRecordResponse(BaseModel):
     advisor_id: Optional[int] = Field(description="通话顾问ID")
     advisor_group_id: Optional[int] = Field(description="所属顾问组ID")
     advisor_group_sub_id: Optional[int] = Field(description="所属顾问组子ID")
-    conversation_content: Optional[dict] = Field(description="对话记录JSON")
+    conversation_content: Optional[str] = Field(description="对话记录文本")
     call_summary: Optional[str] = Field(description="通话总结")
     call_quality_score: Optional[int] = Field(description="通话质量评分")
     quality_notes: Optional[str] = Field(description="质检备注")
