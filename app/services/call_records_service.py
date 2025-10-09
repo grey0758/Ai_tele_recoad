@@ -4,6 +4,7 @@
 提供通话记录相关的业务逻辑处理
 """
 import json
+import uuid
 from typing import Optional, Sequence
 from sqlalchemy import select, and_, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -503,7 +504,7 @@ class CallRecordsService(BaseService):
             file_size=record.FileSize,
             file_name=record.FileName,
             custom_id=record.CustomId,
-            record_uuid=record.uuid,
+            record_uuid=record.uuid if record.uuid and record.uuid.strip() else str(uuid.uuid4()),
             upload_state=record.UploadState,
 
             # 存储信息
