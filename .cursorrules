@@ -1,0 +1,286 @@
+# Cursor Rules for AI Tele FastAPI Project
+
+## 项目概述
+这是一个基于 FastAPI 的 AI 电话录音系统，支持文件上传、云存储、事件总线、定时任务等功能。
+
+## 技术栈
+- **后端框架**: FastAPI + Uvicorn
+- **数据库**: MySQL (通过 SSH 隧道连接)
+- **ORM**: SQLAlchemy + Alembic
+- **数据验证**: Pydantic v2
+- **任务调度**: APScheduler
+- **事件总线**: 自定义事件总线系统
+- **云存储**: 腾讯云 COS
+- **缓存**: Redis
+- **日志**: 自定义日志系统
+
+## 代码规范
+
+### 1. 代码风格
+- 使用中文注释和文档字符串
+- 遵循 PEP 8 代码风格
+- 使用 Black 格式化工具 (line-length=200)
+- 使用 isort 进行导入排序
+- 使用 mypy 进行类型检查
+
+### 2. 文件结构规范
+```
+app/
+├── api/v1/endpoints/     # API 端点
+├── core/                 # 核心配置和依赖
+├── db/                   # 数据库相关
+├── middleware/           # 中间件
+├── models/              # 数据模型
+├── schemas/              # Pydantic 模式
+├── services/             # 业务逻辑服务
+└── utils/               # 工具函数
+```
+
+### 3. 命名规范
+- **文件名**: 使用下划线命名 (snake_case)
+- **类名**: 使用大驼峰命名 (PascalCase)
+- **函数/变量名**: 使用下划线命名 (snake_case)
+- **常量**: 使用大写字母和下划线 (UPPER_CASE)
+- **私有方法**: 使用单下划线前缀 (_private_method)
+
+### 4. 导入规范
+```python
+# 标准库导入
+import os
+from typing import List, Dict, Optional
+
+# 第三方库导入
+from fastapi import FastAPI, Depends
+from sqlalchemy import Column, Integer, String
+
+# 本地导入
+from app.core.config import settings
+from app.schemas.base import ResponseBuilder
+```
+
+### 5. 类型注解
+- 所有函数参数和返回值必须有类型注解
+- 使用 `typing` 模块的类型提示
+- 复杂类型使用 `Annotated` 进行描述
+
+### 6. 异常处理
+- 使用统一的异常处理机制
+- 所有异常都要记录日志
+- 使用 `ResponseBuilder` 构造统一响应格式
+- 避免使用裸露的 `except:` 语句
+
+### 7. 日志规范
+```python
+from app.core.logger import get_logger
+
+logger = get_logger(__name__)
+
+# 使用结构化日志
+logger.info("操作成功 | user_id=%s, action=%s", user_id, action)
+logger.error("操作失败 | error=%s, context=%s", str(e), context)
+```
+
+### 8. 数据库操作
+- 使用 SQLAlchemy ORM
+- 所有数据库操作都要有异常处理
+- 使用事务管理
+- 避免 N+1 查询问题
+
+### 9. API 设计规范
+- 使用统一的响应格式 (`ResponseData`)
+- 所有端点都要有文档字符串
+- 使用 Pydantic 模型进行数据验证
+- 遵循 RESTful API 设计原则
+
+### 10. 服务层设计
+- 继承 `BaseService` 基类
+- 支持事件总线集成
+- 实现健康检查方法
+- 使用依赖注入模式
+
+## 开发规范
+
+### 1. 新功能开发
+- 先设计数据模型和 API 接口
+- 实现服务层业务逻辑
+- 添加单元测试
+- 更新 API 文档
+
+### 2. 代码审查要点
+- 类型注解完整性
+- 异常处理是否完善
+- 日志记录是否充分
+- 性能是否有问题
+- 安全性是否考虑
+
+### 3. 测试规范
+- 单元测试覆盖率 > 80%
+- 使用 pytest 框架
+- 异步测试使用 `pytest-asyncio`
+- 集成测试标记为 `@pytest.mark.integration`
+
+### 4. 配置管理
+- 使用 `pydantic-settings` 管理配置
+- 敏感信息使用环境变量
+- 提供默认值和验证规则
+
+### 5. 事件总线使用
+```python
+# 发送事件
+await self.emit_event(
+    EventType.FILE_UPLOAD_RECORD,
+    data=upload_data,
+    wait_for_result=True
+)
+
+# 注册监听器
+await self._register_listener(
+    EventType.FILE_UPLOAD_RECORD,
+    self.handle_file_upload,
+    priority=EventPriority.HIGH
+)
+```
+
+## 性能优化
+
+### 1. 数据库优化
+- 使用连接池
+- 避免 N+1 查询
+- 合理使用索引
+- 使用异步数据库操作
+
+### 2. 缓存策略
+- 使用 Redis 缓存热点数据
+- 设置合理的过期时间
+- 使用缓存穿透保护
+
+### 3. 文件处理
+- 使用流式处理大文件
+- 异步文件操作
+- 合理的文件大小限制
+
+## 安全规范
+
+### 1. 输入验证
+- 所有输入都要经过 Pydantic 验证
+- 文件上传要检查文件类型和大小
+- 防止 SQL 注入和 XSS 攻击
+
+### 2. 认证授权
+- 使用 JWT 令牌
+- 实现角色权限控制
+- 敏感操作需要二次验证
+
+### 3. 数据保护
+- 敏感数据加密存储
+- 使用 HTTPS 传输
+- 定期备份重要数据
+
+## 部署规范
+
+### 1. 环境配置
+- 开发环境使用 SQLite
+- 生产环境使用 MySQL
+- 使用 Docker 容器化部署
+
+### 2. 监控告警
+- 健康检查端点
+- 日志监控
+- 性能指标监控
+
+### 3. 备份策略
+- 数据库定期备份
+- 文件存储备份
+- 配置信息备份
+
+## 代码示例
+
+### API 端点示例
+```python
+@router.post("/upload", response_model=ResponseData[dict])
+async def upload_audio(
+    data: Annotated[FileUploadRequest, Form()],
+    file_service: FileService = Depends(get_file_service),
+):
+    """上传文件"""
+    try:
+        result = await file_service.emit_event(
+            EventType.FILE_UPLOAD_RECORD, 
+            data=data, 
+            wait_for_result=True
+        )
+        return ResponseBuilder.success(result, "文件上传成功")
+    except Exception as e:
+        return ResponseBuilder.error(f"文件上传失败: {str(e)}", ResponseCode.INTERNAL_ERROR)
+```
+
+### 服务类示例
+```python
+class FileService(BaseService):
+    """文件服务"""
+    
+    async def handle_file_upload(self, event: Event) -> dict:
+        """处理文件上传事件"""
+        try:
+            # 业务逻辑处理
+            result = await self._process_file(event.data)
+            self.stats["total_processed"] += 1
+            return result
+        except Exception as e:
+            self.stats["total_failed"] += 1
+            logger.error("文件处理失败 | error=%s", str(e))
+            raise
+```
+
+### 数据模型示例
+```python
+class FileUploadRequest(BaseModel):
+    """文件上传请求"""
+    
+    file_uuid: str = Field(description="文件唯一标识")
+    file_name: str = Field(description="文件名")
+    file_size: int = Field(description="文件大小")
+    
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "file_uuid": "123e4567-e89b-12d3-a456-426614174000",
+                "file_name": "record.mp3",
+                "file_size": 1024000
+            }
+        }
+    )
+```
+
+## 注意事项
+
+1. **不要写注释**: 代码要自解释，避免不必要的注释
+2. **删除未使用代码**: 迁移代码时删除原位置的代码
+3. **减少组件间依赖**: 保持组件独立性
+4. **Windows 11 兼容**: 确保代码在 Windows 11 环境下正常运行
+5. **不自动执行**: 修改代码后不要自动运行或创建文档文件
+
+## 工具配置
+
+### Black 配置
+```toml
+[tool.black]
+line-length = 200
+target-version = ['py310']
+```
+
+### isort 配置
+```toml
+[tool.isort]
+profile = "black"
+line_length = 200
+```
+
+### mypy 配置
+```toml
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+```
