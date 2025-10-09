@@ -154,7 +154,7 @@ class AdvisorDeviceConfigResponse(BaseModel):
 
     id: Annotated[int, Field(..., description="主键ID")]
     device_id: Annotated[str, Field(..., max_length=50, description="设备ID")]
-    devid: Annotated[Optional[str], Field(default=None, max_length=50, description="设备ID（新字段）")]
+    devid: Annotated[Optional[str], Field(default=None, max_length=200, description="设备ID（新字段）")]
     advisor_id: Annotated[int, Field(..., description="顾问ID")]
     advisor_name: Annotated[str, Field(..., max_length=50, description="顾问姓名")]
     goal: Annotated[int, Field(..., description="指标")]
