@@ -151,7 +151,7 @@ class AdvisorCallDurationStatsUpdateRequestWithId(AdvisorCallDurationStatsUpsert
 
 class AdvisorDeviceConfigResponse(BaseModel):
     """顾问设备配置响应 Schema"""
-    
+
     id: Annotated[int, Field(..., description="主键ID")]
     device_id: Annotated[str, Field(..., max_length=50, description="设备ID")]
     devid: Annotated[Optional[str], Field(default=None, max_length=50, description="设备ID（新字段）")]

@@ -7,7 +7,7 @@ aiBox 服务层
 from typing import Optional
 from datetime import date
 import httpx
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.events import Event, EventType
 from app.core.event_bus import ProductionEventBus
@@ -342,31 +342,61 @@ class Aiboxservice(BaseService):
                 logger.error("更新指标完成状态失败: %s", e)
                 raise
 
-    async def get_advisor_device_config_by_devid(self, devid: str) -> Optional[AdvisorDeviceConfig]:
+    async def get_or_create_advisor_device_config(self, device_id: str, devid: str) -> AdvisorDeviceConfig:
         """
-        通过devid获取顾问设备配置
+        通过device_id获取或创建顾问设备配置
         
         Args:
-            devid: 设备ID
+            device_id: 设备ID
+            devid: 设备ID（新字段）
             
         Returns:
-            顾问设备配置记录，如果未找到则返回None
+            顾问设备配置记录
         """
         try:
             async with self.database.get_session() as db_session:
+                # 先通过device_id查找记录
                 query = select(AdvisorDeviceConfig).where(
-                    AdvisorDeviceConfig.devid == devid
+                    AdvisorDeviceConfig.device_id == device_id
                 )
                 result = await db_session.execute(query)
                 device_config = result.scalar_one_or_none()
-                
+
                 if device_config:
-                    logger.info("通过devid获取设备配置成功: devid=%s, advisor_id=%s", devid, device_config.advisor_id)
+                    # 如果存在，检查devid是否一致
+                    if device_config.devid != devid:
+                        # 不一致则同步devid
+                        device_config.devid = devid
+                        await db_session.commit()
+                        logger.info("同步devid成功: device_id=%s, devid=%s", device_id, devid)
+                    else:
+                        logger.info("通过device_id获取设备配置成功: device_id=%s, advisor_id=%s", device_id, device_config.advisor_id)
                 else:
-                    logger.warning("未找到devid对应的设备配置: %s", devid)
-                
+                    # 如果不存在，创建新的advisor记录
+                    # 首先获取下一个可用的advisor_id
+                    max_advisor_query = select(func.max(AdvisorDeviceConfig.advisor_id))
+                    max_result = await db_session.execute(max_advisor_query)
+                    max_advisor_id = max_result.scalar() or 0
+                    new_advisor_id = max_advisor_id + 1
+
+                    # 创建新的设备配置记录
+                    device_config = AdvisorDeviceConfig(
+                        device_id=device_id,
+                        devid=devid,
+                        advisor_id=new_advisor_id,
+                        advisor_name=f"测试用户（{devid[:8]}）",  # 使用devid的前8位作为用户名
+                        goal=7200
+                    )
+
+                    db_session.add(device_config)
+                    await db_session.commit()
+                    await db_session.refresh(device_config)
+
+                    logger.info("创建新的顾问设备配置成功: device_id=%s, devid=%s, advisor_id=%s",
+                              device_id, devid, new_advisor_id)
+
                 return device_config
-                
+
         except Exception as e:
-            logger.error("通过devid获取设备配置失败: devid=%s, 错误: %s", devid, str(e))
+            logger.error("获取或创建顾问设备配置失败: device_id=%s, devid=%s, 错误: %s", device_id, devid, str(e))
             raise

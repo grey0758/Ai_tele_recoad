@@ -165,29 +165,29 @@ async def trigger_advisor_stats_wechat_report(
 
 
 @router.get(
-    "/advisor-device-config/by-devid/{devid}",
+    "/advisor-device-config/by-device-id/{device_id}",
     response_model=ResponseData[AdvisorDeviceConfigResponse],
-    summary="通过设备ID获取顾问设备配置",
+    summary="通过设备ID获取或创建顾问设备配置",
 )
-async def get_advisor_device_config_by_devid(
-    devid: str = Path(..., description="设备ID"),
+async def get_or_create_advisor_device_config(
+    device_id: str = Path(..., description="设备ID"),
+    devid: str = Query(..., description="设备ID（新字段）"),
     aibox_service: Aiboxservice = Depends(get_aibox_service),
 ):
     """
-    通过设备ID获取顾问设备配置
+    通过设备ID获取或创建顾问设备配置
     
-    根据devid查找对应的设备配置记录
+    1. 通过device_id查找记录
+    2. 如果存在，验证devid是否一致，不一致则同步
+    3. 如果不存在，则创建新的advisor记录
     """
     try:
-        device_config = await aibox_service.get_advisor_device_config_by_devid(devid)
-        if not device_config:
-            return ResponseBuilder.not_found(f"未找到设备ID {devid} 对应的顾问设备配置记录")
-
+        device_config = await aibox_service.get_or_create_advisor_device_config(device_id, devid)
         response_data = AdvisorDeviceConfigResponse.model_validate(device_config)
-        return ResponseBuilder.success(response_data, "通过设备ID获取顾问设备配置成功")
+        return ResponseBuilder.success(response_data, "获取或创建顾问设备配置成功")
 
     except Exception as e:  # pylint: disable=broad-except
-        logger.error("通过设备ID获取顾问设备配置失败: devid=%s, 错误: %s", devid, str(e))
+        logger.error("获取或创建顾问设备配置失败: device_id=%s, devid=%s, 错误: %s", device_id, devid, str(e))
         return ResponseBuilder.error(
-            f"通过设备ID获取顾问设备配置失败: {str(e)}", ResponseCode.INTERNAL_ERROR
+            f"获取或创建顾问设备配置失败: {str(e)}", ResponseCode.INTERNAL_ERROR
         )

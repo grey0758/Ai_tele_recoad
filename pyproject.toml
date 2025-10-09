@@ -43,6 +43,7 @@ dependencies = [
     "mypy>=1.18.2",
     "types-aiofiles>=24.1.0.20250822",
     "cos-python-sdk-v5>=1.9.38",
+    "types-requests>=2.32.4.20250913",
 ]
 
 [project.optional-dependencies]
