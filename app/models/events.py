@@ -16,6 +16,7 @@ class EventType(Enum):
     """事件类型"""
     FILE_UPLOAD_RECORD = "file.upload_record"
     SEND_ADVISOR_STATS_WECHAT_REPORT_TASK = "send.advisor.stats.wechat.report.task"
+    CALL_RECORDS_SAVE_AUTO_UPLOAD = "call_records.save_auto_upload"
 
 class EventPriority(Enum):
     """事件优先级"""

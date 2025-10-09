@@ -341,3 +341,32 @@ class Aiboxservice(BaseService):
                 await db_session.rollback()
                 logger.error("更新指标完成状态失败: %s", e)
                 raise
+
+    async def get_advisor_device_config_by_devid(self, devid: str) -> Optional[AdvisorDeviceConfig]:
+        """
+        通过devid获取顾问设备配置
+        
+        Args:
+            devid: 设备ID
+            
+        Returns:
+            顾问设备配置记录，如果未找到则返回None
+        """
+        try:
+            async with self.database.get_session() as db_session:
+                query = select(AdvisorDeviceConfig).where(
+                    AdvisorDeviceConfig.devid == devid
+                )
+                result = await db_session.execute(query)
+                device_config = result.scalar_one_or_none()
+                
+                if device_config:
+                    logger.info("通过devid获取设备配置成功: devid=%s, advisor_id=%s", devid, device_config.advisor_id)
+                else:
+                    logger.warning("未找到devid对应的设备配置: %s", devid)
+                
+                return device_config
+                
+        except Exception as e:
+            logger.error("通过devid获取设备配置失败: devid=%s, 错误: %s", devid, str(e))
+            raise

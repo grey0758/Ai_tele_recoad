@@ -12,6 +12,7 @@ from app.services.aibox_service import Aiboxservice
 from app.schemas.advisor_call_duration_stats import (
     AdvisorCallDurationStatsUpdateRequestWithDeviceIdAndStatsDate,
     AdvisorCallDurationStatsResponse,
+    AdvisorDeviceConfigResponse,
 )
 from app.models.events import EventType
 from app.schemas.base import ResponseData, ResponseBuilder, ResponseCode
@@ -161,3 +162,32 @@ async def trigger_advisor_stats_wechat_report(
             max_retries=0,
         )
     return ResponseBuilder.success(None, message)
+
+
+@router.get(
+    "/advisor-device-config/by-devid/{devid}",
+    response_model=ResponseData[AdvisorDeviceConfigResponse],
+    summary="通过设备ID获取顾问设备配置",
+)
+async def get_advisor_device_config_by_devid(
+    devid: str = Path(..., description="设备ID"),
+    aibox_service: Aiboxservice = Depends(get_aibox_service),
+):
+    """
+    通过设备ID获取顾问设备配置
+    
+    根据devid查找对应的设备配置记录
+    """
+    try:
+        device_config = await aibox_service.get_advisor_device_config_by_devid(devid)
+        if not device_config:
+            return ResponseBuilder.not_found(f"未找到设备ID {devid} 对应的顾问设备配置记录")
+
+        response_data = AdvisorDeviceConfigResponse.model_validate(device_config)
+        return ResponseBuilder.success(response_data, "通过设备ID获取顾问设备配置成功")
+
+    except Exception as e:  # pylint: disable=broad-except
+        logger.error("通过设备ID获取顾问设备配置失败: devid=%s, 错误: %s", devid, str(e))
+        return ResponseBuilder.error(
+            f"通过设备ID获取顾问设备配置失败: {str(e)}", ResponseCode.INTERNAL_ERROR
+        )

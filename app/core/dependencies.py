@@ -16,6 +16,8 @@ from app.services.aibox_service import Aiboxservice
 from app.services.scheduled_tasks_service import ScheduledTasksService
 from app.core.scheduler_service import SchedulerService
 from app.db.database import Database
+from app.services.redis_service import RedisService
+from app.services.call_records_service import CallRecordsService
 
 logger = get_logger(__name__)
 
@@ -69,6 +71,8 @@ class EnhancedServiceContainer:
     async def _initialize_services(self):
         """初始化业务服务"""
         self._services["db_service"] = Database()
+        self._services["redis_service"] = RedisService(self._event_bus)
+        self._services["call_records_service"] = CallRecordsService(self._event_bus, self._services["db_service"], self._services["redis_service"])
         self._services["file_service"] = FileService(self._event_bus)
         self._services["lead_service"] = LeadService(self._event_bus, self._services["db_service"])
         self._services["aibox_service"] = Aiboxservice(self._event_bus, self._services["db_service"])
@@ -126,6 +130,10 @@ class EnhancedServiceContainer:
         self._services.clear()
         self._event_bus = None
         self._initialized = False
+
+    def get_redis_service(self) -> RedisService:
+        """获取Redis服务"""
+        return self._services["redis_service"]
 
     def register_service(self, name: str, service):
         """注册服务"""
@@ -208,6 +216,11 @@ def get_scheduled_tasks_service() -> ScheduledTasksService:
 def get_scheduler_service() -> SchedulerService:
     """获取调度器服务"""
     return service_container.get_service("scheduler_service")
+
+
+def get_call_records_service() -> CallRecordsService:
+    """获取通话记录服务"""
+    return service_container.get_service("call_records_service")
 
 
 def get_all_services() -> Dict[str, Any]:

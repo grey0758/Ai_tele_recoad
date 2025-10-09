@@ -49,13 +49,13 @@ class Database:
                 database_url = (
                     f"mysql+aiomysql://{settings.db_username}:"
                     f"{settings.db_password}@127.0.0.1:"
-                    f"{settings.ssh_local_port}/{settings.db_name}"
+                    f"{settings.ssh_local_port}/{settings.db_name}?charset=utf8mb4"
                 )
             else:
                 database_url = (
                     f"mysql+aiomysql://{settings.db_username}:"
                     f"{settings.db_password}@{settings.db_host}:"
-                    f"{settings.db_port}/{settings.db_name}"
+                    f"{settings.db_port}/{settings.db_name}?charset=utf8mb4"
                 )
 
             # 创建异步引擎

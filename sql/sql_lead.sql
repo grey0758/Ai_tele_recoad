@@ -171,6 +171,7 @@ CREATE TABLE advisor_groups (
     code VARCHAR(20) NOT NULL UNIQUE COMMENT '组编码：用于程序识别',
     leader_id SMALLINT COMMENT '组长ID：关联advisors表，但不设外键避免循环依赖',
     lead_category_id TINYINT COMMENT '线索类型ID：关联lead_categories表，指定该组负责的线索类型',
+    parent_id TINYINT COMMENT '父组ID：支持组层级结构，顶级组为NULL',
     settings JSON COMMENT '组设置：工作时间、分配规则、最大线索数等配置信息',
     is_active BOOLEAN DEFAULT TRUE COMMENT '是否启用：控制状态可用性',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
@@ -180,15 +181,18 @@ CREATE TABLE advisor_groups (
     INDEX idx_code (code),
     INDEX idx_active (is_active),
     INDEX idx_lead_category (lead_category_id),
+    INDEX idx_parent_id (parent_id),
 
     -- 外键约束
-    FOREIGN KEY (lead_category_id) REFERENCES lead_categories(id) ON DELETE SET NULL
+    FOREIGN KEY (lead_category_id) REFERENCES lead_categories(id) ON DELETE SET NULL,
+    FOREIGN KEY (parent_id) REFERENCES advisor_groups(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='顾问组表';
 
 -- 顾问表
 CREATE TABLE advisors (
     id SMALLINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID',
     group_id TINYINT NOT NULL COMMENT '所属组ID',
+    sub_group_id TINYINT COMMENT '所属子组ID：支持顾问分配到子组',
     name VARCHAR(50) NOT NULL COMMENT '顾问姓名',
     status TINYINT DEFAULT 1 COMMENT '状态：1=在职，0=离职，2=休假',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
@@ -196,10 +200,12 @@ CREATE TABLE advisors (
 
     -- 索引设计
     INDEX idx_group_status (group_id, status),
+    INDEX idx_sub_group_status (sub_group_id, status),
     INDEX idx_status (status),
 
     -- 外键约束
-    FOREIGN KEY (group_id) REFERENCES advisor_groups(id) ON DELETE RESTRICT
+    FOREIGN KEY (group_id) REFERENCES advisor_groups(id) ON DELETE RESTRICT,
+    FOREIGN KEY (sub_group_id) REFERENCES advisor_groups(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='顾问表';
 
 -- =====================================================
@@ -301,52 +307,66 @@ CREATE TABLE leads (
 -- 通话记录表
 CREATE TABLE call_records (
     id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID，使用BIGINT支持大数据量',
-    call_no VARCHAR(30) UNIQUE NOT NULL COMMENT '通话编号：业务唯一标识，格式如CALL20240917001',
     
-    -- 关联信息
-    lead_id BIGINT NOT NULL COMMENT '关联的线索ID',
-    advisor_id SMALLINT NOT NULL COMMENT '通话顾问ID',
+    -- CallRecordUploadRequest 主要字段
+    dev_id VARCHAR(50) NOT NULL COMMENT '设备ID',
+    record_id INT NOT NULL COMMENT '记录ID',
+    ch TINYINT NOT NULL COMMENT '通道号',
+    begin_time BIGINT NOT NULL COMMENT '开始时间戳',
+    end_time BIGINT NOT NULL COMMENT '结束时间戳',
+    time_len INT NOT NULL COMMENT '通话时长(秒)',
+    call_type ENUM('callIn', 'callOut', 'callInNoAnswer', 'callOutNoAnswer') NOT NULL COMMENT '通话类型',
+    phone VARCHAR(20) NOT NULL COMMENT '电话号码',
+    dtmf_keys VARCHAR(100) DEFAULT '' COMMENT 'DTMF按键',
+    ring_count INT DEFAULT 0 COMMENT '振铃次数',
+    file_size BIGINT NOT NULL COMMENT '文件大小(字节)',
+    file_name VARCHAR(255) NOT NULL COMMENT '文件路径',
+    custom_id VARCHAR(100) DEFAULT '' COMMENT '自定义ID',
+    record_uuid VARCHAR(36) NOT NULL UNIQUE COMMENT '记录UUID',
+    upload_state TINYINT NOT NULL COMMENT '上传状态',
     
-    -- 通话基础信息
-    call_type ENUM('INBOUND', 'INBOUND_MISSED', 'OUTBOUND', 'OUTBOUND_MISSED') 
-              NOT NULL COMMENT '通话类型：呼入、呼入未接、呼出、呼出未接',
-    caller_phone VARCHAR(20) NOT NULL COMMENT '主叫号码',
-    callee_phone VARCHAR(20) NOT NULL COMMENT '被叫号码',
+    -- 存储信息
+    local_path VARCHAR(500) COMMENT '本地文件路径',
+    cloud_url VARCHAR(500) COMMENT '云存储URL',
+    cloud_uploaded BOOLEAN DEFAULT FALSE COMMENT '是否已上传到云存储',
     
-    -- 通话详情
-    call_duration SMALLINT DEFAULT 0 COMMENT '通话时长（秒）：0表示未接通',
-    start_time TIMESTAMP NOT NULL COMMENT '通话开始时间',
-    end_time TIMESTAMP COMMENT '通话结束时间',
-    
-    -- 录音信息
-    recording_url VARCHAR(300) COMMENT '录音文件URL地址',
-    recording_duration SMALLINT COMMENT '录音时长（秒）',
-    recording_status ENUM('RECORDING', 'COMPLETED', 'FAILED', 'DELETED') 
-                     DEFAULT 'RECORDING' COMMENT '录音状态：录音中、已完成、失败、已删除',
-    -- 对话记录和总结
+    -- 业务扩展字段
+    call_no VARCHAR(30) UNIQUE COMMENT '通话编号：业务唯一标识，格式如CALL20240917001',
+    lead_id BIGINT COMMENT '关联的线索ID',
+    advisor_id SMALLINT COMMENT '通话顾问ID',
+    advisor_group_id TINYINT COMMENT '所属顾问组ID',
+    advisor_group_sub_id TINYINT COMMENT '所属顾问组子ID',
     conversation_content JSON COMMENT '对话记录：包含对话内容、关键信息提取、客户需求等',
     call_summary TEXT COMMENT '通话总结：顾问填写的通话要点和后续跟进计划',
-    
-    -- 质量评估
     call_quality_score TINYINT COMMENT '通话质量评分：1-100分，用于质检评估',
     quality_notes TEXT COMMENT '质检备注：质检人员的评价和建议',
     
     -- 时间戳
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '记录创建时间',
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '记录更新时间',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     
-    -- 性能优化索引
-    INDEX idx_lead_time (lead_id, start_time),
-    INDEX idx_advisor_time (advisor_id, start_time),
-    INDEX idx_call_type_time (call_type, start_time),
-    INDEX idx_recording_status (recording_status),
-    INDEX idx_phone_time (caller_phone, start_time),
+    -- 索引设计
+    INDEX idx_dev_id (dev_id),
+    INDEX idx_record_id (record_id),
+    INDEX idx_phone (phone),
+    INDEX idx_call_type (call_type),
+    INDEX idx_begin_time (begin_time),
+    INDEX idx_upload_state (upload_state),
+    INDEX idx_cloud_uploaded (cloud_uploaded),
+    INDEX idx_lead_id (lead_id),
+    INDEX idx_advisor_id (advisor_id),
+    INDEX idx_advisor_group (advisor_group_id),
+    INDEX idx_call_type_time (call_type, begin_time),
+    INDEX idx_phone_time (phone, begin_time),
+    UNIQUE KEY uk_record_uuid (record_uuid),
+    UNIQUE KEY uk_dev_record (dev_id, record_id),
     
     -- 外键约束
     FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE,
-    FOREIGN KEY (advisor_id) REFERENCES advisors(id) ON DELETE RESTRICT
+    FOREIGN KEY (advisor_id) REFERENCES advisors(id) ON DELETE RESTRICT,
+    FOREIGN KEY (advisor_group_id) REFERENCES advisor_groups(id) ON DELETE SET NULL
     
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='通话记录表-记录所有通话详情和状态变更';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='通话记录表';
 
 -- 线索状态变更日志表
 CREATE TABLE lead_status_logs (
@@ -465,16 +485,13 @@ INSERT INTO advisor_groups (name, code) VALUES
 ('三号组', 'GROUP_3');
 
 -- 顾问初始化数据
-INSERT INTO advisors (group_id, name, status) VALUES
-(1, '张三', 1),
-(1, '李四', 1),
-(2, '王五', 1),
-(2, '赵六', 1),
-(3, '孙七', 1),
-(3, '周八', 1),
-(1, '顾问7', 1),
-(2, '顾问8', 1),
-(3, '顾问9', 1);
+INSERT INTO advisors (id, group_id, name, status, created_at, updated_at) VALUES
+(1, 1, 'grey', 1, '2025-09-25 18:00:24', '2025-10-08 18:38:21'),
+(2, 1, 'NIKO', 1, '2025-09-25 18:00:24', '2025-10-08 18:38:23'),
+(3, 1, '俊涛', 1, '2025-09-26 11:00:36', '2025-10-08 18:38:24'),
+(4, 1, '智浩', 1, '2025-09-26 11:10:56', '2025-10-08 18:38:25'),
+(5, 1, '思怡', 1, '2025-09-26 11:11:19', '2025-10-08 18:38:26'),
+(6, 1, '佳慧', 1, '2025-09-26 11:12:00', '2025-10-08 18:38:28'),
 
 -- =====================================================
 -- 第六步：插入测试数据
@@ -554,3 +571,154 @@ INSERT INTO leads (
 (3, NULL, 3, 6, '秦海璐', '13800138058', 'qinhl@email.com', '海璐', 'wx_qinhl58', 3, NULL, 1, NULL, NULL, NULL, NULL, NULL, 1, NULL, 1, '2024-09-20 14:30:00'),
 (3, NULL, 1, 1, '陶虹', '13800138059', 'taohong@email.com', '虹姐', 'wx_taohong59', 4, 6, 2, NULL, 1, 2, 1, 2, 2, NULL, 4, '2024-09-20 15:15:00'),
 (3, NULL, 2, 4, '闫妮', '13800138060', 'yanni@email.com', '妮妮', 'wx_yanni60', 2, NULL, 1, NULL, NULL, NULL, NULL, NULL, 1, NULL, 1, '2024-09-20 16:50:00');
+
+-- =====================================================
+-- 
+-- 
+-- =====================================================
+DROP TABLE IF EXISTS advisor_call_duration_stats;
+
+CREATE TABLE advisor_call_duration_stats (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID',
+    advisor_id SMALLINT NOT NULL COMMENT '顾问ID',
+    advisor_name VARCHAR(50) NOT NULL COMMENT '顾问姓名',
+    stats_date DATE NOT NULL COMMENT '统计日期',
+    device_id VARCHAR(50) NOT NULL COMMENT '设备ID',
+    
+    -- 总体统计
+    total_calls BIGINT NOT NULL DEFAULT 0 COMMENT '总呼叫记录数',
+    total_connected BIGINT NOT NULL DEFAULT 0 COMMENT '总接通数目',
+    total_unconnected BIGINT NOT NULL DEFAULT 0 COMMENT '未接通总数',
+    total_duration BIGINT NOT NULL DEFAULT 0 COMMENT '总通话时长(秒)',
+    total_duration_correction BIGINT NOT NULL DEFAULT 0 COMMENT '总通话时长修正值(秒)',
+    connection_rate DECIMAL(5,2) NOT NULL DEFAULT 0.00 COMMENT '接通率(%)',
+    
+    -- 呼出统计
+    outbound_calls BIGINT NOT NULL DEFAULT 0 COMMENT '总呼出记录',
+    outbound_connected BIGINT NOT NULL DEFAULT 0 COMMENT '呼出接通数目',
+    outbound_unconnected BIGINT NOT NULL DEFAULT 0 COMMENT '呼出未接通数',
+    outbound_duration BIGINT NOT NULL DEFAULT 0 COMMENT '呼出总通话时长(秒)',
+    outbound_connection_rate DECIMAL(5,2) NOT NULL DEFAULT 0.00 COMMENT '呼出接通率(%)',
+    
+    -- 呼入统计
+    inbound_calls BIGINT NOT NULL DEFAULT 0 COMMENT '总呼入记录',
+    inbound_connected BIGINT NOT NULL DEFAULT 0 COMMENT '呼入接通数目',
+    inbound_unconnected BIGINT NOT NULL DEFAULT 0 COMMENT '呼入未接通数',
+    inbound_duration BIGINT NOT NULL DEFAULT 0 COMMENT '呼入总通话时长(秒)',
+    inbound_connection_rate DECIMAL(5,2) NOT NULL DEFAULT 0.00 COMMENT '呼入接通率(%)',
+    
+    -- 通话时长分段统计(总体) - 修正字段名匹配API
+    duration_under_5s BIGINT NOT NULL DEFAULT 0 COMMENT '通话时长<5秒总数',
+    duration_5s_to_10s BIGINT NOT NULL DEFAULT 0 COMMENT '通话时长5-10秒总数',
+    duration_10s_to_20s BIGINT NOT NULL DEFAULT 0 COMMENT '通话时长10-20秒总数',
+    duration_20s_to_30s BIGINT NOT NULL DEFAULT 0 COMMENT '通话时长20-30秒总数',
+    duration_30s_to_45s BIGINT NOT NULL DEFAULT 0 COMMENT '通话时长30-45秒总数',
+    duration_45s_to_60s BIGINT NOT NULL DEFAULT 0 COMMENT '通话时长45-60秒总数',
+    duration_over_60s BIGINT NOT NULL DEFAULT 0 COMMENT '通话时长大于60秒总数',
+    
+    -- 呼出通话时长分段统计 - 修正字段名匹配API
+    outbound_duration_under_5s BIGINT NOT NULL DEFAULT 0 COMMENT '呼出通话时长<5秒',
+    outbound_duration_5s_to_10s BIGINT NOT NULL DEFAULT 0 COMMENT '呼出通话时长5-10秒',
+    outbound_duration_10s_to_20s BIGINT NOT NULL DEFAULT 0 COMMENT '呼出通话时长10-20秒',
+    outbound_duration_20s_to_30s BIGINT NOT NULL DEFAULT 0 COMMENT '呼出通话时长20-30秒',
+    outbound_duration_30s_to_45s BIGINT NOT NULL DEFAULT 0 COMMENT '呼出通话时长30-45秒',
+    outbound_duration_45s_to_60s BIGINT NOT NULL DEFAULT 0 COMMENT '呼出通话时长45-60秒',
+    outbound_duration_over_60s BIGINT NOT NULL DEFAULT 0 COMMENT '呼出通话时长大于60秒',
+    
+    -- 呼入通话时长分段统计 - 修正字段名匹配API
+    inbound_duration_under_5s BIGINT NOT NULL DEFAULT 0 COMMENT '呼入通话时长<5秒',
+    inbound_duration_5s_to_10s BIGINT NOT NULL DEFAULT 0 COMMENT '呼入通话时长5-10秒',
+    inbound_duration_10s_to_20s BIGINT NOT NULL DEFAULT 0 COMMENT '呼入通话时长10-20秒',
+    inbound_duration_20s_to_30s BIGINT NOT NULL DEFAULT 0 COMMENT '呼入通话时长20-30秒',
+    inbound_duration_30s_to_45s BIGINT NOT NULL DEFAULT 0 COMMENT '呼入通话时长30-45秒',
+    inbound_duration_45s_to_60s BIGINT NOT NULL DEFAULT 0 COMMENT '呼入通话时长45-60秒',
+    inbound_duration_over_60s BIGINT NOT NULL DEFAULT 0 COMMENT '呼入通话时长大于60秒',
+    
+    -- 指标相关字段
+    goal BIGINT NOT NULL DEFAULT 7200 COMMENT '今日指标',
+    goal_completed_today BOOLEAN NOT NULL DEFAULT FALSE COMMENT '今天是否完成指标',
+    
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+
+    UNIQUE KEY uk_advisor_date (advisor_id, stats_date),
+    KEY idx_advisor_id (advisor_id),
+    KEY idx_stats_date (stats_date)
+    
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='顾问通话时长统计表';
+
+-- 插入顾问通话时长统计数据
+INSERT INTO advisor_call_duration_stats (
+    advisor_id, advisor_name, stats_date, device_id,
+    total_calls, total_connected, total_unconnected, total_duration, total_duration_correction, connection_rate,
+    outbound_calls, outbound_connected, outbound_unconnected, outbound_duration, outbound_connection_rate,
+    inbound_calls, inbound_connected, inbound_unconnected, inbound_duration, inbound_connection_rate,
+    duration_under_5s, duration_5s_to_10s, duration_10s_to_20s, duration_20s_to_30s, 
+    duration_30s_to_45s, duration_45s_to_60s, duration_over_60s,
+    outbound_duration_under_5s, outbound_duration_5s_to_10s, outbound_duration_10s_to_20s, 
+    outbound_duration_20s_to_30s, outbound_duration_30s_to_45s, outbound_duration_45s_to_60s, outbound_duration_over_60s,
+    inbound_duration_under_5s, inbound_duration_5s_to_10s, inbound_duration_10s_to_20s, 
+    inbound_duration_20s_to_30s, inbound_duration_30s_to_45s, inbound_duration_45s_to_60s, inbound_duration_over_60s
+) VALUES
+-- 张小明的统计数据 (2024-01-15)
+(
+    1001, '张小明', '2025-09-25', 'ebt-5b343ab5',
+    -- 总体统计
+    150, 120, 30, 7200, 0, 80.00,
+    -- 呼出统计  
+    90, 75, 15, 4500, 83.33,
+    -- 呼入统计
+    60, 45, 15, 2700, 75.00,
+    -- 总体时长分段
+    10, 15, 25, 20, 30, 15, 5,
+    -- 呼出时长分段
+    5, 8, 15, 12, 20, 10, 5,
+    -- 呼入时长分段
+    5, 7, 10, 8, 10, 5, 0
+),
+-- 李小红的统计数据 (2024-01-15)
+(
+    1002, '李小红', '2025-09-25', '8002',
+    -- 总体统计
+    200, 180, 20, 10800, 0, 90.00,
+    -- 呼出统计
+    120, 110, 10, 6600, 91.67,
+    -- 呼入统计
+    80, 70, 10, 4200, 87.50,
+    -- 总体时长分段
+    8, 12, 30, 35, 45, 35, 15,
+    -- 呼出时长分段
+    3, 6, 18, 22, 28, 23, 10,
+    -- 呼入时长分段
+    5, 6, 12, 13, 17, 12, 5
+);
+
+
+DROP TABLE IF EXISTS advisor_device_config;
+
+CREATE TABLE advisor_device_config (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID',
+    device_id VARCHAR(50) NOT NULL COMMENT '设备ID',
+    devid VARCHAR(50) COMMENT '设备ID（新字段）',
+    advisor_id SMALLINT NOT NULL COMMENT '顾问ID',
+    advisor_name VARCHAR(50) NOT NULL COMMENT '顾问姓名',
+    goal BIGINT NOT NULL DEFAULT 7200 COMMENT '指标',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    
+    KEY idx_device_id (device_id),
+    KEY idx_devid (devid),
+    KEY idx_advisor_id (advisor_id),
+    
+    -- 外键约束
+    FOREIGN KEY (advisor_id) REFERENCES advisors(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='顾问设备配置表';
+
+-- 插入顾问设备配置数据
+INSERT INTO advisor_device_config (device_id, devid, advisor_id, advisor_name, goal, created_at, updated_at) VALUES
+('ebt-5b343ab5', 'ebt-5b343ab5', 1, 'grey', 0, '2025-09-25 18:00:24', '2025-10-08 18:38:21'),
+('ebt-c86a2a86', 'ebt-c86a2a86', 2, 'NIKO', 7200, '2025-09-25 18:00:24', '2025-10-08 18:38:23'),
+('ebt-ae2f3221', 'ebt-ae2f3221', 3, '俊涛', 7200, '2025-09-26 11:00:36', '2025-10-08 18:38:24'),
+('ebt-10d0aea2', 'ebt-10d0aea2', 4, '智浩', 7200, '2025-09-26 11:10:56', '2025-10-08 18:38:25'),
+('ebt-106546ad', 'ebt-106546ad', 5, '思怡', 7200, '2025-09-26 11:11:19', '2025-10-08 18:38:26'),
+('ebt-f836aa7e', 'ebt-f836aa7e', 6, '佳慧', 7200, '2025-09-26 11:12:00', '2025-10-08 18:38:28');

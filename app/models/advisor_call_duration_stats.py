@@ -96,6 +96,7 @@ class AdvisorDeviceConfig(Base):
     # 主键
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, comment="主键ID")
     device_id: Mapped[str] = mapped_column(String(50), nullable=False, comment="设备ID")
+    devid: Mapped[str] = mapped_column(String(50), comment="设备ID（新字段）")
     advisor_id: Mapped[int] = mapped_column(SmallInteger, nullable=False, comment="顾问ID")
     advisor_name: Mapped[str] = mapped_column(String(50), nullable=False, comment="顾问姓名")
     goal: Mapped[int] = mapped_column(nullable=False, default=7200, comment="指标")
@@ -108,4 +109,5 @@ class AdvisorDeviceConfig(Base):
     __table_args__ = (
         UniqueConstraint("device_id", name="uk_device_id"),
         Index("idx_device_id", "device_id"),
+        Index("idx_devid", "devid"),
     )

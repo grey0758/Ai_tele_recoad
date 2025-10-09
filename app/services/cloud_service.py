@@ -70,6 +70,7 @@ class CloudService:
                 Body=file_content,
                 Key=object_key,
                 ContentType=content_type,
+                ContentDisposition="inline"
             )
 
             logger.info("文件上传成功: %s, ETag: %s", object_key, response.get("ETag"))
@@ -141,7 +142,7 @@ class CloudService:
 
     async def get_file_url(self, object_key: str, expires: int = 315360000) -> str:
         """
-        获取文件的临时访问URL
+        获取文件的临时访问URL（预签名URL）
 
         Args:
             object_key: 对象键
@@ -157,6 +158,24 @@ class CloudService:
             return url
         except Exception as e:
             logger.error("获取文件URL失败: %s, 错误: %s", object_key, str(e))
+            raise
+
+    async def get_resource_url(self, object_key: str) -> str:
+        """
+        获取文件的资源访问URL（公开访问链接）
+
+        Args:
+            object_key: 对象键
+
+        Returns:
+            资源访问URL
+        """
+        try:
+            url = self.client.get_object_url(Bucket=self.bucket, Key=object_key)
+            logger.info("生成资源访问URL成功: %s", object_key)
+            return url
+        except Exception as e:
+            logger.error("获取资源访问URL失败: %s, 错误: %s", object_key, str(e))
             raise
 
     def _get_content_type(self, object_key: str) -> str:

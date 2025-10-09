@@ -21,6 +21,8 @@ class CallType(str, Enum):
     """通话类型枚举"""
     CALL_IN = "callIn"
     CALL_OUT = "callOut"
+    CALL_IN_NO_ANSWER = "callInNoAnswer"
+    CALL_OUT_NO_ANSWER = "callOutNoAnswer"
 
 class CallRecord(BaseModel):
     """通话记录信息"""

@@ -147,3 +147,32 @@ class AdvisorCallDurationStatsUpdateRequestWithId(AdvisorCallDurationStatsUpsert
     advisor_name: Annotated[Optional[str], Field(default=None, description="顾问姓名")]
     stats_date: Annotated[Optional[date], Field(default=None, description="统计日期")]
     device_id: Annotated[Optional[str], Field(default=None, description="设备ID")]
+
+
+class AdvisorDeviceConfigResponse(BaseModel):
+    """顾问设备配置响应 Schema"""
+    
+    id: Annotated[int, Field(..., description="主键ID")]
+    device_id: Annotated[str, Field(..., max_length=50, description="设备ID")]
+    devid: Annotated[Optional[str], Field(default=None, max_length=50, description="设备ID（新字段）")]
+    advisor_id: Annotated[int, Field(..., description="顾问ID")]
+    advisor_name: Annotated[str, Field(..., max_length=50, description="顾问姓名")]
+    goal: Annotated[int, Field(..., description="指标")]
+    created_at: Annotated[datetime, Field(..., description="创建时间")]
+    updated_at: Annotated[datetime, Field(..., description="更新时间")]
+
+    model_config = ConfigDict(
+        from_attributes=True,
+        json_schema_extra={
+            "example": {
+                "id": 1,
+                "device_id": "ebt-5b343ab5",
+                "devid": "BFEBFBFF000A0671WFL6BYFD48817eb8",
+                "advisor_id": 1,
+                "advisor_name": "grey",
+                "goal": 7200,
+                "created_at": "2025-09-25T18:00:24",
+                "updated_at": "2025-10-08T21:21:18"
+            }
+        }
+    )

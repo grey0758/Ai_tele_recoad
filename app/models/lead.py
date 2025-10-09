@@ -14,11 +14,10 @@ from app.db.database import Base
 class Lead(Base):
     """线索主表模型"""
 
-    __tablename__ = "lead2_leads"
+    __tablename__ = "leads"
 
     # 主键
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, comment="主键ID，使用BIGINT支持大数据量")
-    lead_no: Mapped[str] = mapped_column(String(30), unique=True, nullable=False, comment="线索编号：业务唯一标识，格式如LEAD20240917001",)
 
     # 核心分类信息
     category_id: Mapped[int] = mapped_column(SmallInteger, nullable=False, comment="线索类型ID：关联lead_categories表")
