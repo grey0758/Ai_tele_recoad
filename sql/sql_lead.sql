@@ -336,8 +336,8 @@ CREATE TABLE call_records (
     advisor_id SMALLINT COMMENT '通话顾问ID',
     advisor_group_id TINYINT COMMENT '所属顾问组ID',
     advisor_group_sub_id TINYINT COMMENT '所属顾问组子ID',
-    conversation_content JSON COMMENT '对话记录：包含对话内容、关键信息提取、客户需求等',
-    call_summary TEXT COMMENT '通话总结：顾问填写的通话要点和后续跟进计划',
+    conversation_content TEXT COMMENT '对话记录：包含对话内容、关键信息提取、客户需求等',
+    call_summary LONGTEXT COMMENT '通话总结：顾问填写的通话要点和后续跟进计划',
     call_quality_score TINYINT COMMENT '通话质量评分：1-100分，用于质检评估',
     quality_notes TEXT COMMENT '质检备注：质检人员的评价和建议',
     

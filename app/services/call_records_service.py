@@ -449,8 +449,16 @@ class CallRecordsService(BaseService):
         local_path = f"uploads/{record.FileName}" if upload_request.HasFile == 1 else None
 
         # 获取对话内容并进行AI分析
-        conversation_content = await self.get_conversation_content(record.uuid)
-        call_quality_score, call_summary = await self.analyze_call_with_ai(conversation_content)
+        if record.uuid:
+            conversation_content = await self.get_conversation_content(record.uuid)
+        else:
+            conversation_content = ""
+
+        if conversation_content:
+            call_quality_score, call_summary = await self.analyze_call_with_ai(conversation_content)
+        else:
+            call_quality_score = None
+            call_summary = None
 
         # 根据设备ID获取顾问信息
         advisor_info = await self.get_advisor_info_by_device_id(record.DevId)
