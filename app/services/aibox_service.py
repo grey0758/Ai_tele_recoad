@@ -405,7 +405,7 @@ class Aiboxservice(BaseService):
                     await db_session.commit()
                     await db_session.refresh(device_config)
 
-                    logger.info("创建新的顾问和设备配置成功: device_id=%s, devid=%s, advisor_id=%s", 
+                    logger.info("创建新的顾问和设备配置成功: device_id=%s, devid=%s, advisor_id=%s",
                               device_id, devid, new_advisor_id)
 
                 return device_config

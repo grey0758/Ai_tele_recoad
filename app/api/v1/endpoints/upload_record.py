@@ -5,7 +5,6 @@
 """
 
 from typing import Annotated
-import os
 from fastapi import APIRouter, Depends, Form, File, UploadFile, Query
 from app.schemas.file_record import CallRecord, CallRecordUploadRequest
 from app.core.dependencies import get_file_service
@@ -71,13 +70,13 @@ async def upload_af_crm(
             content = await file.read()
             logger.info("📁 文件大小: %d 字节", len(content))
 
-            # 1. 保存到本地uploads文件夹
-            upload_dir = "uploads"
-            os.makedirs(upload_dir, exist_ok=True)
-            local_path = os.path.join(upload_dir, file.filename)
-            with open(local_path, "wb") as f:
-                f.write(content)
-            logger.info("✅ 本地文件保存成功: %s", local_path)
+            # # 1. 保存到本地uploads文件夹
+            # upload_dir = "uploads"
+            # os.makedirs(upload_dir, exist_ok=True)
+            # local_path = os.path.join(upload_dir, file.filename)
+            # with open(local_path, "wb") as f:
+            #     f.write(content)
+            # logger.info("✅ 本地文件保存成功: %s", local_path)
 
             # 2. 上传到云存储
             try:
