@@ -4,6 +4,7 @@
 提供通话记录相关的业务逻辑处理
 """
 import json
+import time
 import uuid
 from typing import Optional, Sequence
 from sqlalchemy import select, and_, func
@@ -444,7 +445,7 @@ class CallRecordsService(BaseService):
         # 从CallRecordUploadRequest中提取数据
         record = upload_request.record
 
-        call_no = upload_request.record.uuid
+        call_no = upload_request.record.uuid if upload_request.record.uuid and upload_request.record.uuid.strip() else f"CALL{int(time.time())}{str(uuid.uuid4())[:8]}"
 
         # 根据文件处理逻辑设置本地路径
         local_path = f"uploads/{record.FileName}" if upload_request.HasFile == 1 else None
