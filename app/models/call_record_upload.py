@@ -20,7 +20,7 @@ class CallRecordUpload(Base):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, comment="主键ID，使用BIGINT支持大数据量")
 
     # CallRecordUploadRequest 主要字段
-    dev_id: Mapped[str] = mapped_column(String(50), nullable=False, comment="设备ID")
+    dev_id: Mapped[str] = mapped_column(String(200), nullable=False, comment="设备ID")
     record_id: Mapped[int] = mapped_column(Integer, nullable=False, comment="记录ID")
     ch: Mapped[int] = mapped_column(SmallInteger, nullable=False, comment="通道号")
     begin_time: Mapped[int] = mapped_column(BigInteger, nullable=False, comment="开始时间戳")

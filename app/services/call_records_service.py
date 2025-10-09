@@ -509,7 +509,7 @@ class CallRecordsService(BaseService):
             advisor_id=advisor_id,
             advisor_group_id=advisor_group_id,
             advisor_group_sub_id=advisor_group_sub_id,
-            conversation_content={"content": conversation_content} if conversation_content else None,
+            conversation_content=conversation_content,
             call_summary=call_summary,
             call_quality_score=call_quality_score,
             quality_notes=None

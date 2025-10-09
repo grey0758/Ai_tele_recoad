@@ -21,7 +21,7 @@ class CallTypeEnum(str, Enum):
 class CallRecordCreate(BaseModel):
     """创建通话记录请求"""
 
-    dev_id: str = Field(description="设备ID")
+    dev_id: str = Field(max_length=200, description="设备ID")
     record_id: int = Field(description="记录ID")
     ch: int = Field(description="通道号")
     begin_time: int = Field(description="开始时间戳")
@@ -61,7 +61,7 @@ class CallRecordCreate(BaseModel):
 class CallRecordUpdate(BaseModel):
     """更新通话记录请求"""
 
-    dev_id: Optional[str] = Field(default=None, description="设备ID")
+    dev_id: Optional[str] = Field(default=None, max_length=200, description="设备ID")
     record_id: Optional[int] = Field(default=None, description="记录ID")
     ch: Optional[int] = Field(default=None, description="通道号")
     begin_time: Optional[int] = Field(default=None, description="开始时间戳")
@@ -103,7 +103,7 @@ class CallRecordResponse(BaseModel):
     """通话记录响应"""
 
     id: int = Field(description="主键ID")
-    dev_id: str = Field(description="设备ID")
+    dev_id: str = Field(max_length=200, description="设备ID")
     record_id: int = Field(description="记录ID")
     ch: int = Field(description="通道号")
     begin_time: int = Field(description="开始时间戳")
@@ -152,7 +152,7 @@ class CallRecordQueryParams(BaseModel):
     sort_order: str = Field(default="desc", description="排序方向")
 
     # 基础查询条件
-    dev_id: Optional[str] = Field(default=None, description="设备ID")
+    dev_id: Optional[str] = Field(default=None, max_length=200, description="设备ID")
     record_id: Optional[int] = Field(default=None, description="记录ID")
     phone: Optional[str] = Field(default=None, description="电话号码")
     call_type: Optional[CallTypeEnum] = Field(default=None, description="通话类型")

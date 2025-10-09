@@ -309,7 +309,7 @@ CREATE TABLE call_records (
     id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID，使用BIGINT支持大数据量',
     
     -- CallRecordUploadRequest 主要字段
-    dev_id VARCHAR(50) NOT NULL COMMENT '设备ID',
+    dev_id VARCHAR(200) NOT NULL COMMENT '设备ID',
     record_id INT NOT NULL COMMENT '记录ID',
     ch TINYINT NOT NULL COMMENT '通道号',
     begin_time BIGINT NOT NULL COMMENT '开始时间戳',
@@ -699,7 +699,7 @@ DROP TABLE IF EXISTS advisor_device_config;
 CREATE TABLE advisor_device_config (
     id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID',
     device_id VARCHAR(50) NOT NULL COMMENT '设备ID',
-    devid VARCHAR(50) COMMENT '设备ID（新字段）',
+    devid VARCHAR(200) COMMENT '设备ID（新字段）',
     advisor_id SMALLINT NOT NULL COMMENT '顾问ID',
     advisor_name VARCHAR(50) NOT NULL COMMENT '顾问姓名',
     goal BIGINT NOT NULL DEFAULT 7200 COMMENT '指标',
