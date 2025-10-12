@@ -1,36 +1,10 @@
 # app/models/call_record.py
 """电话记录数据类"""
-from enum import IntEnum
 import uuid
 from typing import List, Annotated
 from datetime import datetime
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, Field
 
-class CallType(IntEnum):
-    """通话类型"""
-    INCOMING = 1  # 呼入
-    INCOMING_MISSED = 2  # 呼入未接
-    OUTGOING = 3  # 呼出
-    OUTGOING_MISSED = 4  # 呼出未接
-
-    @classmethod
-    def get_description(cls, value: int) -> str:
-        """根据数字获取中文描述"""
-        try:
-            return str(cls(value))
-        except ValueError:
-            return "未知类型"
-
-    @classmethod
-    def get_description_safe(cls, value: int, default: str = "未知类型") -> str:
-        """安全地根据数字获取中文描述"""
-        descriptions = {
-            1: "呼入",
-            2: "呼入未接",
-            3: "呼出",
-            4: "呼出未接"
-        }
-        return descriptions.get(value, default)
 
 class DialogEntry(BaseModel):
     """对话记录数据类"""
@@ -58,18 +32,3 @@ class CallRecord(BaseModel):
     instance: Annotated[int, Field(description="设备实例ID")]
     dialog_record: Annotated[List[DialogEntry], Field(default_factory=list, description="对话记录列表")]
     notes: Annotated[str | None, Field(default=None, description="备注信息")]
-
-class CallRecordInfo(CallRecord):
-    """电话记录信息数据类 - 继承自CallRecord并添加额外字段"""
-    area: Annotated[str | None, Field(default=None, description="地区")]
-    file_size: Annotated[int | None, Field(default=None, description="文件大小")]
-    file_url: Annotated[str | None, Field(default=None, description="文件URL")]
-    model_config = ConfigDict(use_enum_values=False)
-
-class CurrentCallInfo(BaseModel):
-    """当前拨打电话信息数据类"""
-    uuid_call_id: Annotated[str | None, Field(default=None, description="通话唯一标识UUID")]
-    uuid_call_record: Annotated[str | None, Field(default=None, description="电话记录UUID")]
-    phone: Annotated[str | None, Field(default=None, description="电话号码")]
-    instance: Annotated[int, Field( description="设备实例ID")]
-    device_index: Annotated[int, Field(description="设备索引")]

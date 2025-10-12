@@ -42,7 +42,7 @@ class CallRecord(BaseModel):
     uuid: Annotated[str, Field(description="记录UUID")]
     UploadState: Annotated[int, Field(description="上传状态")]
 
-class CallRecordUploadRequest(BaseModel):
+class CallRecordsRequest(BaseModel):
     """通话录音上传请求"""
     record: Annotated[CallRecord, Field(description="通话记录")]
     fileName: Annotated[str | None, Field(default=None, description="文件名称")]

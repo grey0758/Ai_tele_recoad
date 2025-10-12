@@ -82,6 +82,12 @@ class Settings(BaseSettings):
     cos_region: str = Field(default="ap-guangzhou", description="COS Region")
     cos_bucket: str | None = Field(default=None, description="COS Bucket")
 
+    # Xunfei Configuration
+    xunfei_app_id: str | None = Field(default=None, description="Xunfei App ID")
+    xunfei_access_key_id: str | None = Field(default=None, description="Xunfei Access Key ID")
+    xunfei_access_key_secret: str | None = Field(default=None, description="Xunfei Access Key Secret")
+    xunfei_api_url: str = Field(default="https://office-api-ist-dx.iflyaisol.com", description="Xunfei API URL")
+
     model_config = SettingsConfigDict(env_file=".env", arbitrary_types_allowed=True)
 
 settings = Settings()

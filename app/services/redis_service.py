@@ -6,7 +6,7 @@ import redis.asyncio as redis
 from redis.exceptions import LockError, LockNotOwnedError
 from app.core.config import settings
 from app.core.event_bus import ProductionEventBus
-from app.models.call_record import CallRecord, DialogRecord
+from app.models.redis_models import CallRecord, DialogRecord
 
 # 使用主应用的logger
 from app.core.logger import get_logger

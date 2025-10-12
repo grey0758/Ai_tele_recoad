@@ -37,6 +37,7 @@ dependencies = [
     "numpy",
     "requests",
     "httpx",
+    "mutagen",
     "rich",
     "aiofiles",
     "aiomysql>=0.2.0",
@@ -44,6 +45,12 @@ dependencies = [
     "types-aiofiles>=24.1.0.20250822",
     "cos-python-sdk-v5>=1.9.38",
     "types-requests>=2.32.4.20250913",
+    "playwright>=1.55.0",
+    "markdown>=3.9",
+    # Markdown转换相关
+    "weasyprint>=62.0",
+    "pdfkit>=1.0.0",
+    "python-docx>=1.1.0",
 ]
 
 [project.optional-dependencies]
@@ -63,10 +70,14 @@ dev = [
 ]
 audio = [
     "pyaudio>=0.2.11",
+    "pydub>=0.25.1",
 ]
 
 [tool.uv]
 link-mode = "copy"
+
+[tool.uv.pip]
+index-url = "https://mirrors.aliyun.com/pypi/simple/"
 
 [tool.setuptools.packages.find]
 include = ["app*"]
@@ -109,6 +120,27 @@ filterwarnings = [
 dev = [
     "black>=25.1.0",
     "pytest-asyncio>=1.1.0",
+    "types-markdown>=3.9.0.20250906",
+    "types-reportlab>=4.4.4.20250926",
+]
+audio = [
+    "pydub>=0.25.1",
+]
+markdown-conversion = [
+    # 基础Markdown处理
+    "markdown>=3.9",
+    "markdown-extensions>=0.0.1",
+    # PDF转换
+    "weasyprint>=62.0",
+    "pdfkit>=1.0.0",
+    "reportlab>=4.0.0",
+    # Word转换
+    "python-docx>=1.1.0",
+    # 浏览器自动化
+    "playwright>=1.55.0",
+    # 其他转换工具
+    "pypandoc>=1.11",
+    "markdown2>=2.4.0",
 ]
 
 [tool.mypy]
@@ -118,3 +150,7 @@ ignore_missing_imports = true
 
 [tool.pylint]
 max-line-length = 200
+disable = [
+    "broad-exception-caught",  # 禁用捕获通用异常的警告
+    "trailing-whitespace",     # 禁用尾随空格的警告
+]

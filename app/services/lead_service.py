@@ -47,18 +47,6 @@ class LeadService(BaseService):
                 logger.error("获取线索失败: %s", e)
                 return None
 
-    async def get_lead_by_lead_no(self, lead_no: str) -> Optional[Lead]:
-        """根据线索编号获取线索"""
-        async with self.database.get_session() as db_session:
-            try:
-                result = await db_session.execute(
-                    select(Lead).where(Lead.lead_no == lead_no)
-                )
-                return result.scalar_one_or_none()
-            except Exception as e:  # pylint: disable=broad-except
-                logger.error("根据线索编号获取线索失败: %s", e)
-                return None
-
     async def get_leads_with_pagination(
         self, query_params: LeadQueryParams
     ) -> LeadListResponse:
@@ -165,7 +153,6 @@ class LeadService(BaseService):
                     search_conditions = or_(
                         Lead.customer_name.like(f"%{query_params.search}%"),
                         Lead.customer_phone.like(f"%{query_params.search}%"),
-                        Lead.lead_no.like(f"%{query_params.search}%"),
                         Lead.customer_wechat_name.like(f"%{query_params.search}%"),
                         Lead.customer_wechat_number.like(f"%{query_params.search}%"),
                     )
@@ -227,7 +214,6 @@ class LeadService(BaseService):
                 await db_session.commit()
                 await db_session.refresh(lead)
 
-                logger.info("成功创建线索: %s", lead.lead_no)
                 return lead
 
             except Exception as e:
@@ -251,7 +237,6 @@ class LeadService(BaseService):
                 await db_session.commit()
                 await db_session.refresh(lead)
 
-                logger.info("成功更新线索: %s", lead.lead_no)
                 return lead
 
             except Exception as e:
@@ -270,7 +255,6 @@ class LeadService(BaseService):
                 await db_session.delete(lead)
                 await db_session.commit()
 
-                logger.info("成功删除线索: %s", lead.lead_no)
                 return True
 
             except Exception as e:
@@ -317,13 +301,6 @@ class LeadService(BaseService):
     ) -> Optional[Lead]:
         """在指定会话中根据ID获取线索"""
         result = await db_session.execute(select(Lead).where(Lead.id == lead_id))
-        return result.scalar_one_or_none()
-
-    async def _get_lead_by_lead_no_with_session(
-        self, db_session: AsyncSession, lead_no: str
-    ) -> Optional[Lead]:
-        """在指定会话中根据线索编号获取线索"""
-        result = await db_session.execute(select(Lead).where(Lead.lead_no == lead_no))
         return result.scalar_one_or_none()
 
     async def get_status_mapping(self) -> list:

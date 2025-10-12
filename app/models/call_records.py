@@ -11,8 +11,8 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.db.database import Base
 
 
-class CallRecordUpload(Base):
-    """通话记录上传表模型"""
+class CallRecords(Base):
+    """通话记录表模型"""
 
     __tablename__ = "call_records"
 

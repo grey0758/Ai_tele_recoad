@@ -6,7 +6,7 @@
 
 from typing import Annotated
 from fastapi import APIRouter, Depends, Form, File, UploadFile, Query
-from app.schemas.file_record import CallRecord, CallRecordUploadRequest
+from app.schemas.file_record import CallRecord, CallRecordsRequest
 from app.core.dependencies import get_file_service
 from app.schemas.base import ResponseData, ResponseBuilder, ResponseCode
 from app.schemas.file_record import FileUploadRequest, CallSystemResponse
@@ -56,7 +56,7 @@ async def upload_af_crm(
     logger.info("record数据长度: %d", len(record))
     recoard : CallRecord = CallRecord.model_validate_json(record)
     # 创建上传请求对象（用于验证数据完整性）
-    upload_request = CallRecordUploadRequest(
+    upload_request = CallRecordsRequest(
         record=recoard,
         fileName=fileName,
         HasFile=HasFile,

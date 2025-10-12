@@ -4,8 +4,9 @@ aiBox 服务层
 提供顾问通话时长统计相关的业务逻辑处理
 """
 
-from typing import Optional
-from datetime import date
+from typing import Optional, Dict, Any
+from datetime import date, datetime
+from pathlib import Path
 import httpx
 from sqlalchemy import select, and_, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,6 +26,10 @@ from app.models.events import EventPriority
 from app.core.logger import get_logger
 from app.core.config import settings
 from app.core.exceptions import ExternalRequestException
+from app.utils.advisor_recording_report import analyze_consultant_data, save_consultant_analysis
+from app.utils.markdown_to_pdf import markdown_to_pdf_weasyprint, check_weasyprint_availability
+# 移除循环导入，改为在函数内部导入
+from app.services.call_records_service import CallRecordsService
 
 logger = get_logger(__name__)
 
@@ -32,9 +37,10 @@ logger = get_logger(__name__)
 class Aiboxservice(BaseService):
     """aiox 服务类"""
 
-    def __init__(self, event_bus: ProductionEventBus, database: Database):
+    def __init__(self, event_bus: ProductionEventBus, database: Database, call_records_service: Optional[CallRecordsService] = None):
         super().__init__(event_bus=event_bus, service_name="AiBoxService")
         self.database = database
+        self.call_records_service = call_records_service
         self.event_bus = event_bus
 
     async def initialize(self) -> bool:
@@ -413,3 +419,258 @@ class Aiboxservice(BaseService):
         except Exception as e:
             logger.error("获取或创建顾问设备配置失败: device_id=%s, devid=%s, 错误: %s", device_id, devid, str(e))
             raise
+
+    async def generate_advisor_analysis_report(
+        self, 
+        target_date: Optional[date] = None
+    ) -> Dict[int, str]:
+        """
+        生成所有顾问的分析报告
+        
+        Args:
+            target_date: 目标日期，默认为今天
+            
+        Returns:
+            Dict[int, str]: 顾问ID到报告文件路径的映射
+        """
+        if target_date is None:
+            target_date = date.today()
+            
+        if not self.call_records_service:
+            logger.error("通话记录服务实例未提供")
+            return {}
+            
+        try:
+            # 1. 先获取有通话记录的顾问ID列表
+            advisor_records = await self.call_records_service.get_daily_advisor_call_records(
+                target_date=target_date,
+                advisor_group_id=1,  # 使用默认组ID，让服务返回所有组的记录
+                limit_per_advisor=10,  # 获取前十条
+                enable_transcription=True,
+                max_concurrent_transcription=5
+            )
+            
+            if not advisor_records:
+                logger.warning("未找到任何顾问的通话记录")
+                return {}
+            
+            # 2. 针对有通话记录的顾问，获取统计数据并生成报告
+            results = {}
+            for advisor_id, records in advisor_records.items():
+                if not records:
+                    logger.warning("顾问 %s 没有通话记录", advisor_id)
+                    continue
+                    
+                # 获取统计数据
+                stats = await self.get_advisor_call_duration_stats(advisor_id, target_date)
+                if not stats:
+                    logger.warning("未找到顾问 %s 在 %s 的统计数据", advisor_id, target_date)
+                    continue
+                
+                # 构建顾问数据格式
+                adviser_data: Dict[str, Any] = {
+                    "total_calls": stats.total_calls,
+                    "calls": []
+                }
+                
+                for record in records:
+                    call_data = {
+                        "record_id": record.id,
+                        "customer_id": record.lead_id,
+                        "phone": record.phone,
+                        "call_time": datetime.fromtimestamp(record.begin_time).strftime("%Y-%m-%d %H:%M:%S"),
+                        "duration_seconds": record.time_len,
+                        "file_url": record.cloud_url,
+                        "remark": record.quality_notes or "",
+                        "transcript": record.conversation_content or ""
+                    }
+                    adviser_data["calls"].append(call_data)
+                
+                # 构建日度量化指标
+                daily_metrics = {
+                    "call_count": stats.total_calls,
+                    "connected_calls": stats.total_connected,
+                    "connection_rate": f"{float(stats.connection_rate):.1f}%",
+                    "effective_calls": stats.total_connected,  # 假设接通的都是有效通话
+                    "effective_call_rate": f"{float(stats.connection_rate):.1f}%",
+                    "average_effective_duration": f"{int(stats.total_duration / stats.total_connected // 60)}分{int(stats.total_duration / stats.total_connected % 60)}秒" if stats.total_connected > 0 else "0分0秒", # pylint: disable=line-too-long
+                    "total_effective_duration_minutes": f"{stats.total_duration/60:.1f}"
+                }
+                
+                # 调用分析函数
+                analysis_content, error = analyze_consultant_data(
+                    consultant_name=stats.advisor_name,
+                    report_date=target_date.strftime("%Y-%m-%d"),
+                    adviser_data=adviser_data,
+                    daily_metrics=daily_metrics
+                )
+                
+                if error:
+                    logger.error("分析顾问 %s 数据失败: %s", advisor_id, error)
+                    continue
+                    
+                # 保存分析报告
+                report_path = save_consultant_analysis(
+                    consultant_name=stats.advisor_name,
+                    analysis_content=analysis_content,
+                    report_date=target_date.strftime("%Y-%m-%d")
+                )
+                
+                results[advisor_id] = report_path
+                logger.info("成功生成顾问 %s 分析报告: %s", advisor_id, report_path)
+            
+            logger.info("完成所有顾问分析报告生成，成功: %d 个", len(results))
+            return results
+            
+        except Exception as e:
+            logger.error("生成顾问分析报告失败: %s", e)
+            return {}
+
+    async def convert_markdown_reports_to_pdf(
+        self, 
+        target_date: Optional[date] = None,
+        output_dir: Optional[str] = None
+    ) -> Dict[int, str]:
+        """
+        将生成的Markdown分析报告转换为PDF格式
+        
+        Args:
+            target_date: 目标日期，默认为今天
+            output_dir: 输出目录，默认为consultant_analysis_output
+            
+        Returns:
+            Dict[int, str]: 顾问ID到PDF文件路径的映射
+        """
+        if target_date is None:
+            target_date = date.today()
+            
+        if output_dir is None:
+            output_dir = "consultant_analysis_output"
+            
+        # 检查WeasyPrint是否可用
+        if not check_weasyprint_availability():
+            logger.error("WeasyPrint不可用，无法进行PDF转换")
+            return {}
+            
+        try:
+            # 构建Markdown文件目录路径
+            md_dir = Path(output_dir) / target_date.strftime("%Y-%m-%d")
+            pdf_dir = Path(output_dir) / target_date.strftime("%Y-%m-%d") / "pdf"
+            
+            if not md_dir.exists():
+                logger.warning("Markdown文件目录不存在: %s", md_dir)
+                return {}
+            
+            # 创建PDF输出目录
+            pdf_dir.mkdir(parents=True, exist_ok=True)
+            
+            # 查找所有Markdown文件
+            md_files = list(md_dir.glob("*.md"))
+            if not md_files:
+                logger.warning("未找到Markdown文件: %s", md_dir)
+                return {}
+            
+            results = {}
+            success_count = 0
+            
+            for md_file in md_files:
+                try:
+                    # 生成PDF文件名
+                    pdf_file = pdf_dir / f"{md_file.stem}.pdf"
+                    
+                    # 转换PDF
+                    if markdown_to_pdf_weasyprint(
+                        markdown_file=str(md_file),
+                        output_file=str(pdf_file),
+                        title=md_file.stem
+                    ):
+                        # 从文件名中提取顾问ID（假设文件名格式包含顾问信息）
+                        # 这里需要根据实际的文件命名规则来提取
+                        advisor_id = self._extract_advisor_id_from_filename(md_file.stem)
+                        if advisor_id is not None:
+                            results[advisor_id] = str(pdf_file)
+                        success_count += 1
+                        logger.info("成功转换PDF: %s -> %s", md_file.name, pdf_file.name)
+                    else:
+                        logger.error("转换PDF失败: %s", md_file.name)
+                        
+                except Exception as e:
+                    logger.error("转换PDF时出错: %s, 错误: %s", md_file.name, e)
+            
+            logger.info("PDF转换完成，成功: %d/%d 个文件", success_count, len(md_files))
+            return results
+            
+        except Exception as e:
+            logger.error("批量转换PDF失败: %s", e)
+            return {}
+
+    def _extract_advisor_id_from_filename(self, filename: str) -> Optional[int]:
+        """
+        从文件名中提取顾问ID
+        
+        Args:
+            filename: 文件名（不含扩展名）
+            
+        Returns:
+            Optional[int]: 顾问ID，如果无法提取则返回None
+        """
+        try:
+            # 假设文件名格式为: "顾问名_顾问分析报告_日期_时间戳"
+            # 这里需要根据实际的文件命名规则来调整
+            # 暂时返回一个默认值，实际使用时需要根据具体规则调整
+            logger.debug("尝试从文件名提取顾问ID: %s", filename)
+            # 这里可以添加具体的提取逻辑
+            return None  # 暂时返回None，需要根据实际文件命名规则调整
+        except Exception as e:
+            logger.error("提取顾问ID失败: %s, 错误: %s", filename, e)
+            return None
+
+    async def generate_and_convert_advisor_reports_to_pdf(
+        self, 
+        target_date: Optional[date] = None
+    ) -> Dict[int, Dict[str, str]]:
+        """
+        生成顾问分析报告并转换为PDF
+        
+        Args:
+            target_date: 目标日期，默认为今天
+            
+        Returns:
+            Dict[int, Dict[str, str]]: 顾问ID到报告文件路径的映射
+            {
+                advisor_id: {
+                    "markdown": "markdown文件路径",
+                    "pdf": "pdf文件路径"
+                }
+            }
+        """
+        if target_date is None:
+            target_date = date.today()
+            
+        try:
+            # 1. 生成Markdown报告
+            logger.info("开始生成顾问分析报告: %s", target_date)
+            markdown_reports = await self.generate_advisor_analysis_report(target_date)
+            
+            if not markdown_reports:
+                logger.warning("未生成任何Markdown报告")
+                return {}
+            
+            # 2. 转换为PDF
+            logger.info("开始转换PDF报告: %s", target_date)
+            pdf_reports = await self.convert_markdown_reports_to_pdf(target_date)
+            
+            # 3. 合并结果
+            results = {}
+            for advisor_id, md_path in markdown_reports.items():
+                results[advisor_id] = {
+                    "markdown": md_path,
+                    "pdf": pdf_reports.get(advisor_id, "")
+                }
+            
+            logger.info("完成报告生成和PDF转换，成功: %d 个顾问", len(results))
+            return results
+            
+        except Exception as e:
+            logger.error("生成和转换报告失败: %s", e)
+            return {}
