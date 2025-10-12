@@ -37,8 +37,15 @@ async def upsert_advisor_call_duration_stats(
     更新或插入顾问通话时长统计
 
     如果 UNIQUE KEY (advisor_id, stats_date) 存在则更新，否则插入新记录
+    如果total_duration小于等于0，直接返回成功，不进行数据库更新
     """
     try:
+        # 检查total_duration是否小于等于0
+        if stats_data.total_duration <= 0:
+            logger.info("通话时长为0或负数，跳过数据库更新: device_id=%s, total_duration=%d", 
+                       stats_data.device_id, stats_data.total_duration)
+            return ResponseBuilder.success(None, "无通话时长，跳过更新")
+        
         stats = await aibox_service.upsert_advisor_call_duration_stats(stats_data)
         response_data = AdvisorCallDurationStatsResponse.model_validate(stats)
         return ResponseBuilder.success(response_data, "更新或插入顾问通话时长统计成功")
