@@ -149,3 +149,5 @@ uploads/
 *.sqliteu
 
 uv.lock
+
+consultant_analysis_output
