@@ -722,3 +722,39 @@ INSERT INTO advisor_device_config (device_id, devid, advisor_id, advisor_name, g
 ('ebt-10d0aea2', 'ebt-10d0aea2', 4, '智浩', 7200, '2025-09-26 11:10:56', '2025-10-08 18:38:25'),
 ('ebt-106546ad', 'ebt-106546ad', 5, '思怡', 7200, '2025-09-26 11:11:19', '2025-10-08 18:38:26'),
 ('ebt-f836aa7e', 'ebt-f836aa7e', 6, '佳慧', 7200, '2025-09-26 11:12:00', '2025-10-08 18:38:28');
+
+-- =====================================================
+-- 电话待打表
+-- =====================================================
+
+DROP TABLE IF EXISTS phone_call_queue;
+
+CREATE TABLE phone_call_queue (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID',
+    phone VARCHAR(20) NOT NULL COMMENT '电话号码',
+    is_called BOOLEAN NOT NULL DEFAULT FALSE COMMENT '是否已经拨打：TRUE=已拨打，FALSE=未拨打',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    
+    -- 索引设计
+    INDEX idx_phone (phone),
+    INDEX idx_is_called (is_called),
+    INDEX idx_created_at (created_at),
+    
+    -- 唯一约束：防止重复电话号码
+    UNIQUE KEY uk_phone (phone)
+    
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='电话待打表';
+
+-- 插入测试数据
+INSERT INTO phone_call_queue (phone, is_called) VALUES
+('13800138001', FALSE),
+('13800138002', FALSE),
+('13800138003', TRUE),
+('13800138004', FALSE),
+('13800138005', TRUE),
+('13800138006', FALSE),
+('13800138007', FALSE),
+('13800138008', TRUE),
+('13800138009', FALSE),
+('13800138010', FALSE);

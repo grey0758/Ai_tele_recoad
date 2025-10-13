@@ -6,8 +6,6 @@ aiBox 服务层
 
 from typing import Optional, Dict, Any
 from datetime import date, datetime
-from pathlib import Path
-import httpx
 from sqlalchemy import select, and_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.events import Event, EventType
@@ -24,11 +22,7 @@ from app.schemas.advisor_call_duration_stats import (
 )
 from app.models.events import EventPriority
 from app.core.logger import get_logger
-from app.core.config import settings
-from app.core.exceptions import ExternalRequestException
 from app.utils.advisor_recording_report import analyze_consultant_data, save_consultant_analysis
-from app.utils.markdown_to_pdf import markdown_to_pdf_weasyprint, check_weasyprint_availability
-# 移除循环导入，改为在函数内部导入
 from app.services.call_records_service import CallRecordsService
 
 logger = get_logger(__name__)
@@ -164,14 +158,31 @@ class Aiboxservice(BaseService):
                 return []
 
     async def get_all_advisor_stats_by_date(
-        self, stats_date: date = date.today()
+        self, stats_date: date = date.today(), advisor_group_id: int = 1
     ) -> list[AdvisorCallDurationStats]:
         """获取指定日期的所有顾问通话时长统计"""
         async with self.database.get_session() as db_session:
             try:
+                # 先获取指定顾问组的所有顾问ID
+                advisor_ids_result = await db_session.execute(
+                    select(Advisors.id)
+                    .where(Advisors.group_id == advisor_group_id)
+                )
+                advisor_ids = [row[0] for row in advisor_ids_result.fetchall()]
+                
+                if not advisor_ids:
+                    logger.warning("顾问组 %d 中没有找到任何顾问", advisor_group_id)
+                    return []
+                
+                # 根据顾问ID列表获取统计数据
                 result = await db_session.execute(
                     select(AdvisorCallDurationStats)
-                    .where(AdvisorCallDurationStats.stats_date == stats_date)
+                    .where(
+                        and_(
+                            AdvisorCallDurationStats.stats_date == stats_date,
+                            AdvisorCallDurationStats.advisor_id.in_(advisor_ids)
+                        )
+                    )
                     .order_by(AdvisorCallDurationStats.advisor_id.asc())
                 )
                 return list(result.scalars().all())
@@ -207,54 +218,6 @@ class Aiboxservice(BaseService):
             return (row.advisor_id, row.advisor_name, row.goal)
         return (0, "", 0)
 
-    async def send_wechat_message(
-        self, to_wxid: str, message: str, authorization_token: str = ""
-    ) -> str:
-        """
-        发送微信消息
-
-        Args:
-            to_wxid: 接收者的微信ID
-            message: 要发送的消息内容
-            authorization_token: 授权令牌
-
-        Returns:
-            str: 发送是否成功
-        """
-        url = settings.wechat_bot_url
-
-        headers = {"Content-Type": "application/json"}
-
-        # 将token放到params字段中
-        params = {"token": authorization_token}
-
-        data = {
-            "to_wxid": to_wxid,
-            "msg": {"text": message, "xml": "", "url": "", "name": "", "url_thumb": ""},
-            "to_ren": "",
-            "msg_type": 1,
-            "send_type": 1,
-        }
-
-        try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.post(
-                    url, headers=headers, json=data, params=params
-                )
-
-                if response.status_code == 200:
-                    message = f"微信消息发送成功: to_wxid={to_wxid}"
-                    logger.info(message)
-                    return message
-                else:
-                    error_message = f"微信消息发送失败: status_code={response.status_code}, response={response.text}"
-                    logger.error(error_message)
-                    raise ExternalRequestException(error_message)
-
-        except Exception as e:  # pylint: disable=broad-except
-            error_message = f"微信消息发送异常: to_wxid={to_wxid}, error={str(e)}"
-            logger.error(error_message)
-            raise ExternalRequestException(error_message) from e
 
     # 发送顾问时长统计微信播报定时任务
     async def send_advisor_stats_wechat_report_task(self, _event: Event) -> str:
@@ -304,13 +267,17 @@ class Aiboxservice(BaseService):
         msg = "\n".join(msg_lines)
         logger.info("生成的微信播报消息:\n%s", msg)
 
-        message = await self.send_wechat_message(
-            to_wxid=settings.wechat_default_wxid,
-            message=msg,
-            authorization_token=settings.wechat_bot_token,
-            )
+        # 通过事件发送微信消息，不等待结果
+        await self.emit_event(
+            EventType.SEND_WECHAT_MESSAGE,
+            data={
+                "to_wxid": "58065692621@chatroom",
+                "message": msg
+            },
+            wait_for_result=False
+        )
 
-        return message
+        return "微信播报事件已发送"
 
     async def _check_and_update_goal_completion(self, stats_list: list[AdvisorCallDurationStats]) -> list[AdvisorCallDurationStats]:
         """检查并更新指标完成状态，返回刚刚完成指标的顾问列表"""
@@ -524,153 +491,4 @@ class Aiboxservice(BaseService):
             
         except Exception as e:
             logger.error("生成顾问分析报告失败: %s", e)
-            return {}
-
-    async def convert_markdown_reports_to_pdf(
-        self, 
-        target_date: Optional[date] = None,
-        output_dir: Optional[str] = None
-    ) -> Dict[int, str]:
-        """
-        将生成的Markdown分析报告转换为PDF格式
-        
-        Args:
-            target_date: 目标日期，默认为今天
-            output_dir: 输出目录，默认为consultant_analysis_output
-            
-        Returns:
-            Dict[int, str]: 顾问ID到PDF文件路径的映射
-        """
-        if target_date is None:
-            target_date = date.today()
-            
-        if output_dir is None:
-            output_dir = "consultant_analysis_output"
-            
-        # 检查WeasyPrint是否可用
-        if not check_weasyprint_availability():
-            logger.error("WeasyPrint不可用，无法进行PDF转换")
-            return {}
-            
-        try:
-            # 构建Markdown文件目录路径
-            md_dir = Path(output_dir) / target_date.strftime("%Y-%m-%d")
-            pdf_dir = Path(output_dir) / target_date.strftime("%Y-%m-%d") / "pdf"
-            
-            if not md_dir.exists():
-                logger.warning("Markdown文件目录不存在: %s", md_dir)
-                return {}
-            
-            # 创建PDF输出目录
-            pdf_dir.mkdir(parents=True, exist_ok=True)
-            
-            # 查找所有Markdown文件
-            md_files = list(md_dir.glob("*.md"))
-            if not md_files:
-                logger.warning("未找到Markdown文件: %s", md_dir)
-                return {}
-            
-            results = {}
-            success_count = 0
-            
-            for md_file in md_files:
-                try:
-                    # 生成PDF文件名
-                    pdf_file = pdf_dir / f"{md_file.stem}.pdf"
-                    
-                    # 转换PDF
-                    if markdown_to_pdf_weasyprint(
-                        markdown_file=str(md_file),
-                        output_file=str(pdf_file),
-                        title=md_file.stem
-                    ):
-                        # 从文件名中提取顾问ID（假设文件名格式包含顾问信息）
-                        # 这里需要根据实际的文件命名规则来提取
-                        advisor_id = self._extract_advisor_id_from_filename(md_file.stem)
-                        if advisor_id is not None:
-                            results[advisor_id] = str(pdf_file)
-                        success_count += 1
-                        logger.info("成功转换PDF: %s -> %s", md_file.name, pdf_file.name)
-                    else:
-                        logger.error("转换PDF失败: %s", md_file.name)
-                        
-                except Exception as e:
-                    logger.error("转换PDF时出错: %s, 错误: %s", md_file.name, e)
-            
-            logger.info("PDF转换完成，成功: %d/%d 个文件", success_count, len(md_files))
-            return results
-            
-        except Exception as e:
-            logger.error("批量转换PDF失败: %s", e)
-            return {}
-
-    def _extract_advisor_id_from_filename(self, filename: str) -> Optional[int]:
-        """
-        从文件名中提取顾问ID
-        
-        Args:
-            filename: 文件名（不含扩展名）
-            
-        Returns:
-            Optional[int]: 顾问ID，如果无法提取则返回None
-        """
-        try:
-            # 假设文件名格式为: "顾问名_顾问分析报告_日期_时间戳"
-            # 这里需要根据实际的文件命名规则来调整
-            # 暂时返回一个默认值，实际使用时需要根据具体规则调整
-            logger.debug("尝试从文件名提取顾问ID: %s", filename)
-            # 这里可以添加具体的提取逻辑
-            return None  # 暂时返回None，需要根据实际文件命名规则调整
-        except Exception as e:
-            logger.error("提取顾问ID失败: %s, 错误: %s", filename, e)
-            return None
-
-    async def generate_and_convert_advisor_reports_to_pdf(
-        self, 
-        target_date: Optional[date] = None
-    ) -> Dict[int, Dict[str, str]]:
-        """
-        生成顾问分析报告并转换为PDF
-        
-        Args:
-            target_date: 目标日期，默认为今天
-            
-        Returns:
-            Dict[int, Dict[str, str]]: 顾问ID到报告文件路径的映射
-            {
-                advisor_id: {
-                    "markdown": "markdown文件路径",
-                    "pdf": "pdf文件路径"
-                }
-            }
-        """
-        if target_date is None:
-            target_date = date.today()
-            
-        try:
-            # 1. 生成Markdown报告
-            logger.info("开始生成顾问分析报告: %s", target_date)
-            markdown_reports = await self.generate_advisor_analysis_report(target_date)
-            
-            if not markdown_reports:
-                logger.warning("未生成任何Markdown报告")
-                return {}
-            
-            # 2. 转换为PDF
-            logger.info("开始转换PDF报告: %s", target_date)
-            pdf_reports = await self.convert_markdown_reports_to_pdf(target_date)
-            
-            # 3. 合并结果
-            results = {}
-            for advisor_id, md_path in markdown_reports.items():
-                results[advisor_id] = {
-                    "markdown": md_path,
-                    "pdf": pdf_reports.get(advisor_id, "")
-                }
-            
-            logger.info("完成报告生成和PDF转换，成功: %d 个顾问", len(results))
-            return results
-            
-        except Exception as e:
-            logger.error("生成和转换报告失败: %s", e)
             return {}

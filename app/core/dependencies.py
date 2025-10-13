@@ -14,6 +14,8 @@ from app.services.lead_service import LeadService
 from app.services.upload_record_service import FileService
 from app.services.aibox_service import Aiboxservice
 from app.services.scheduled_tasks_service import ScheduledTasksService
+from app.services.ai_tele_status_service import AiTeleStatusService
+from app.services.wechat_bot_service import WechatBotService
 from app.core.scheduler_service import SchedulerService
 from app.db.database import Database
 from app.services.redis_service import RedisService
@@ -76,6 +78,8 @@ class EnhancedServiceContainer:
         self._services["file_service"] = FileService(self._event_bus)
         self._services["lead_service"] = LeadService(self._event_bus, self._services["db_service"])
         self._services["aibox_service"] = Aiboxservice(self._event_bus, self._services["db_service"])
+        self._services["ai_tele_status_service"] = AiTeleStatusService(self._event_bus, self._services["db_service"])
+        self._services["wechat_bot_service"] = WechatBotService(self._event_bus)
         self._services["scheduled_tasks_service"] = ScheduledTasksService(self._event_bus, self._services["db_service"])
         self._services["scheduler_service"] = SchedulerService(self._event_bus, self._services["db_service"], self._services["scheduled_tasks_service"], self._services["aibox_service"])
 
@@ -221,6 +225,16 @@ def get_scheduler_service() -> SchedulerService:
 def get_call_records_service() -> CallRecordsService:
     """获取通话记录服务"""
     return service_container.get_service("call_records_service")
+
+
+def get_ai_tele_status_service() -> AiTeleStatusService:
+    """获取AI顾问统计服务"""
+    return service_container.get_service("ai_tele_status_service")
+
+
+def get_wechat_bot_service() -> WechatBotService:
+    """获取微信机器人服务"""
+    return service_container.get_service("wechat_bot_service")
 
 
 def get_all_services() -> Dict[str, Any]:

@@ -41,7 +41,7 @@ async def upsert_advisor_call_duration_stats(
     """
     try:
         # 检查total_duration是否小于等于0
-        if stats_data.total_duration <= 0:
+        if not stats_data.total_duration or stats_data.total_duration <= 0:
             logger.info("通话时长为0或负数，跳过数据库更新: device_id=%s, total_duration=%d", 
                        stats_data.device_id, stats_data.total_duration)
             return ResponseBuilder.success(None, "无通话时长，跳过更新")
