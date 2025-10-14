@@ -136,7 +136,7 @@ PROMPT = """
 MODEL = "gpt-4.1"
 MAX_TOKENS = 5000
 url = settings.openai_url
-key = settings.openai_key
+key = settings.openai_api_key
 headers = {
     'Accept': 'application/json',
     'Authorization': f'Bearer {key}',
