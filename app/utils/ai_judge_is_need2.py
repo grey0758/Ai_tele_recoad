@@ -135,8 +135,8 @@ PROMPT = """
 
 MODEL = "gpt-4.1"
 MAX_TOKENS = 5000
-url = "https://api2.aigcbest.top/v1/chat/completions"
-key = "sk-VTsSGtnnweqVzwuh6sO9CdyV2bEAnGWnhY9xHkDLyS0UFdSl"
+url = settings.openai_url
+key = settings.openai_key
 headers = {
     'Accept': 'application/json',
     'Authorization': f'Bearer {key}',
