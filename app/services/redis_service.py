@@ -1,12 +1,11 @@
 """Redis服务类"""
 from contextlib import asynccontextmanager
 from typing import Optional, Dict, Any, List
-import asyncio
 import redis.asyncio as redis
 from redis.exceptions import LockError, LockNotOwnedError
 from app.core.config import settings
 from app.core.event_bus import ProductionEventBus
-from app.models.redis_models import CallRecord, DialogRecord
+from app.models.redis_models import CallRecord
 
 # 使用主应用的logger
 from app.core.logger import get_logger
@@ -148,6 +147,7 @@ class RedisService(BaseService):
         lock_blocking_timeout = blocking_timeout or self.blocking_timeout
 
         lock = None
+        acquired = False
         try:
             if self.redis_client is None:
                 raise RuntimeError("Redis client does not support lock operation")
@@ -158,11 +158,8 @@ class RedisService(BaseService):
                 thread_local=False,
             )
 
-            # 在线程池中获取锁（避免阻塞事件循环）
-            loop = asyncio.get_event_loop()
-            acquired = await loop.run_in_executor(
-                None, lambda: lock.acquire(blocking=True)
-            )
+            # 获取锁
+            acquired = await lock.acquire(blocking=True)
 
             if not acquired:
                 raise TimeoutError(f"Failed to acquire lock: {lock_key}")
@@ -180,11 +177,10 @@ class RedisService(BaseService):
             logger.error("❌ Unexpected error acquiring lock %s: %s", lock_key, e)
             raise
         finally:
-            if lock:
+            if lock and acquired:
                 try:
-                    # 在线程池中释放锁
-                    loop = asyncio.get_event_loop()
-                    await loop.run_in_executor(None, lock.release)
+                    # 释放锁
+                    await lock.release()
                     logger.debug("🔓 Lock released: %s", lock_key)
                 except (LockError, LockNotOwnedError) as e:
                     logger.error("❌ Failed to release lock %s: %s", lock_key, e)
@@ -222,9 +218,8 @@ class RedisService(BaseService):
                     thread_local=False,
                 )
 
-                # 在线程池中获取锁
-                loop = asyncio.get_event_loop()
-                acquired = await loop.run_in_executor(None, lock.acquire, True)
+                # 获取锁
+                acquired = await lock.acquire(blocking=True)
                 if not acquired:
                     raise TimeoutError(f"Failed to acquire lock: {lock_key}")
 
@@ -238,8 +233,7 @@ class RedisService(BaseService):
             # 释放已获取的锁
             for lock in acquired_locks:
                 try:
-                    loop = asyncio.get_event_loop()
-                    await loop.run_in_executor(None, lock.release)
+                    await lock.release()
                 except Exception as release_error:  # pylint: disable=broad-except
                     logger.error(
                         "❌ Failed to release lock during cleanup: %s", release_error
@@ -249,8 +243,7 @@ class RedisService(BaseService):
             # 释放所有锁
             for lock in acquired_locks:
                 try:
-                    loop = asyncio.get_event_loop()
-                    await loop.run_in_executor(None, lock.release)
+                    await lock.release()
                     logger.debug("🔓 Multi-lock released")
                 except (LockError, LockNotOwnedError) as e:
                     logger.error("❌ Failed to release multi-lock: %s", e)
@@ -322,27 +315,3 @@ class RedisService(BaseService):
         except Exception as e:  # pylint: disable=broad-except
             logger.error("Failed to get all call records: %s", e)
             return []
-
-    # ==================== 对话记录管理 ====================
-
-    async def create_dialog_record(self, dialog_record: DialogRecord) -> bool:
-        """
-        创建对话记录 - 使用分布式锁
-        """
-        self._ensure_connected()
-        try:
-            async with self.acquire_lock(
-                f"{self.DIALOG_RECORD_PREFIX}{dialog_record.call_id}"
-            ):
-                if self.redis_client is None:
-                    raise RuntimeError("Redis client is not initialized")
-                await self.redis_client.set(
-                    f"{self.DIALOG_RECORD_PREFIX}{dialog_record.call_id}",
-                    dialog_record.model_dump_json(),
-                    ex=86400,
-                )
-                return True
-        except Exception as e:  # pylint: disable=broad-except
-            logger.error("Failed to create dialog record: %s", e)
-            return False
-
