@@ -89,7 +89,15 @@ class CallRecordsService(BaseService):
     async def get_conversation_content(self, call_id: str) -> str:
         """获取通话的对话内容"""
         try:
-            return await self.redis_service.get_conversation_content(call_id)
+            call_record = await self.redis_service.get_call_record(call_id)
+            if not call_record or not call_record.dialog_record:
+                return ""
+            
+            content_lines = []
+            for entry in call_record.dialog_record:
+                content_lines.append(f"{entry.speaker}:{entry.content}")
+            
+            return "\n".join(content_lines)
         except Exception as e:  # pylint: disable=broad-except
             logger.error("获取对话内容失败: %s", e)
             return ""
