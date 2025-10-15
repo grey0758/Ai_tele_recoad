@@ -23,7 +23,6 @@ class RedisService(BaseService):
     CALL_RECORD_PREFIX = "call_record:"
     LOCK_PREFIX = "lock:"
     CONFIG_INPUT_AUDIO_KEY = "config_input_audio"
-    DIALOG_RECORD_PREFIX = "dialog_record:"
 
     def __init__(self, event_bus: ProductionEventBus):
         """初始化 Redis 服务（支持事件总线注入）"""
@@ -347,80 +346,3 @@ class RedisService(BaseService):
             logger.error("Failed to create dialog record: %s", e)
             return False
 
-    async def get_dialog_record(self, call_id: str, lock: bool = True) -> Optional[DialogRecord]:
-        """
-        获取对话记录
-
-        Args:
-            call_id: 通话记录ID
-            lock: 是否使用分布式锁
-
-        Returns:
-            DialogRecord: 对话记录对象，不存在时返回 None
-        """
-        self._ensure_connected()
-        try:
-            if lock:
-                async with self.acquire_lock(f"{self.DIALOG_RECORD_PREFIX}{call_id}"):
-                    return await self._get_dialog_record_without_lock(call_id)
-            else:
-                return await self._get_dialog_record_without_lock(call_id)
-        except Exception as e:  # pylint: disable=broad-except
-            logger.error("Failed to get dialog record: %s", e)
-            return None
-
-    async def _get_dialog_record_without_lock(
-        self, call_id: str
-    ) -> Optional[DialogRecord]:
-        """
-        内部方法：获取对话记录（不使用锁，避免递归锁）
-        """
-        self._ensure_connected()
-        try:
-            key = f"{self.DIALOG_RECORD_PREFIX}{call_id}"
-            if self.redis_client is None:
-                raise RuntimeError("Redis client is not initialized")
-            data = await self.redis_client.get(key)
-            if not data:
-                logger.warning("Dialog record not found: %s", call_id)
-                return None
-            dialog_record = DialogRecord.model_validate_json(data)
-            return dialog_record
-        except Exception as e:  # pylint: disable=broad-except
-            logger.error("Failed to get dialog record: %s", e)
-            return None
-
-    def convert_dialog_to_content(self, dialog_record: DialogRecord) -> str:
-        """
-        将DialogRecord转换为对话内容字符串
-        
-        Args:
-            dialog_record: 对话记录对象
-            
-        Returns:
-            str: 格式化的对话内容字符串
-        """
-        if not dialog_record or not dialog_record.dialog_record:
-            return ""
-
-        content_lines = []
-        for entry in dialog_record.dialog_record:
-            content_lines.append(f"{entry.speaker}:{entry.content}")
-
-        return "\n".join(content_lines)
-
-    async def get_conversation_content(self, call_id: str) -> str:
-        """
-        获取通话的对话内容字符串
-        
-        Args:
-            call_id: 通话记录ID
-            
-        Returns:
-            str: 格式化的对话内容字符串
-        """
-        dialog_record = await self.get_dialog_record(call_id, lock=False)
-        if not dialog_record:
-            return ""
-
-        return self.convert_dialog_to_content(dialog_record)
