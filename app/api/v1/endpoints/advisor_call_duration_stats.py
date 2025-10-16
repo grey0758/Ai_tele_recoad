@@ -198,6 +198,7 @@ async def trigger_generate_advisor_analysis_report(
             data=event_data if event_data else None,
             wait_for_result=True,
             max_retries=0,
+            timeout=1800.0,  # 30分钟超时
         )
         
         return ResponseBuilder.success({"message": message}, "顾问分析报告生成任务已触发")

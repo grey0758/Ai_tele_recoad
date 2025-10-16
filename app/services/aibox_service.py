@@ -5,6 +5,8 @@ aiBox 服务层
 """
 
 import os
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from typing import Optional, Dict, Any
 from datetime import date, datetime
 from sqlalchemy import select, and_, func
@@ -41,14 +43,21 @@ class Aiboxservice(BaseService):
         self.call_records_service = call_records_service
         self.event_bus = event_bus
         self.cloud_service = CloudService()
+        self._thread_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="advisor_analysis")
 
     async def initialize(self) -> bool:
         return True
 
+    async def cleanup(self):
+        """清理资源"""
+        if hasattr(self, '_thread_pool'):
+            self._thread_pool.shutdown(wait=True)
+            logger.info("线程池已关闭")
+
     async def register_event_listeners(self):
         """注册事件监听器"""
         await self._register_listener(EventType.SEND_ADVISOR_STATS_WECHAT_REPORT_TASK, self.send_advisor_stats_wechat_report_task, priority=EventPriority.HIGH, timeout=30.0)
-        await self._register_listener(EventType.GENERATE_ADVISOR_ANALYSIS_REPORT_TASK, self.generate_advisor_analysis_report, priority=EventPriority.HIGH, timeout=1000.0)
+        await self._register_listener(EventType.GENERATE_ADVISOR_ANALYSIS_REPORT_TASK, self.generate_advisor_analysis_report_threaded, priority=EventPriority.HIGH, timeout=1800.0)
 
     async def upsert_advisor_call_duration_stats(
         self, stats_data: AdvisorCallDurationStatsUpdateRequestWithDeviceIdAndStatsDate
@@ -396,6 +405,176 @@ class Aiboxservice(BaseService):
             logger.error("获取或创建顾问设备配置失败: device_id=%s, devid=%s, 错误: %s", device_id, devid, str(e))
             raise
 
+    async def generate_advisor_analysis_report_threaded(
+        self, 
+        _: Event | None = None,
+        target_date: Optional[date] = None
+    ) -> Dict[int, str]:
+        """
+        使用线程池执行顾问分析报告生成任务
+        
+        Args:
+            event: 事件对象
+            target_date: 目标日期，默认为今天
+            
+        Returns:
+            Dict[int, str]: 顾问ID到报告文件路径的映射
+        """
+        if target_date is None:
+            target_date = date.today()
+            
+        if not self.call_records_service:
+            logger.error("通话记录服务实例未提供")
+            return {}
+            
+        try:
+            # 1. 先获取有通话记录的顾问ID列表（异步操作，在主线程中执行）
+            advisor_records = await self.call_records_service.get_daily_advisor_call_records(
+                target_date=target_date,
+                advisor_group_id=1,
+                limit_per_advisor=10,
+                enable_transcription=True,
+                max_concurrent_transcription=5
+            )
+            
+            if not advisor_records:
+                logger.warning("未找到任何顾问的通话记录")
+                return {}
+            
+            # 2. 针对有通话记录的顾问，获取统计数据并生成报告
+            results = {}
+            for advisor_id, records in advisor_records.items():
+                if not records:
+                    logger.warning("顾问 %s 没有通话记录", advisor_id)
+                    continue
+                    
+                # 获取统计数据（异步操作，在主线程中执行）
+                stats = await self.get_advisor_call_duration_stats(advisor_id, target_date)
+                if not stats:
+                    logger.warning("未找到顾问 %s 在 %s 的统计数据", advisor_id, target_date)
+                    continue
+                
+                # 构建顾问数据格式
+                adviser_data: Dict[str, Any] = {
+                    "total_calls": stats.total_calls,
+                    "calls": []
+                }
+                
+                for record in records:
+                    call_data = {
+                        "record_id": record.id,
+                        "customer_id": record.lead_id,
+                        "phone": record.phone,
+                        "call_time": datetime.fromtimestamp(record.begin_time).strftime("%Y-%m-%d %H:%M:%S"),
+                        "duration_seconds": record.time_len,
+                        "file_url": record.cloud_url,
+                        "remark": record.quality_notes or "",
+                        "transcript": record.conversation_content or ""
+                    }
+                    adviser_data["calls"].append(call_data)
+                
+                # 构建日度量化指标
+                daily_metrics = {
+                    "call_count": stats.total_calls,
+                    "connected_calls": stats.total_connected,
+                    "connection_rate": f"{float(stats.connection_rate):.1f}%",
+                    "effective_calls": stats.total_connected,
+                    "effective_call_rate": f"{float(stats.connection_rate):.1f}%",
+                    "average_effective_duration": f"{int(stats.total_duration / stats.total_connected // 60)}分{int(stats.total_duration / stats.total_connected % 60)}秒" if stats.total_connected > 0 else "0分0秒",
+                    "total_effective_duration_minutes": f"{stats.total_duration/60:.1f}"
+                }
+                
+                # 使用线程池执行同步的分析和保存操作
+                loop = asyncio.get_event_loop()
+                analysis_result = await loop.run_in_executor(
+                    self._thread_pool,
+                    self._analyze_and_save_consultant_data,
+                    stats.advisor_name,
+                    target_date.strftime("%Y-%m-%d"),
+                    adviser_data,
+                    daily_metrics
+                )
+                
+                if analysis_result["error"]:
+                    logger.error("分析顾问 %s 数据失败: %s", advisor_id, analysis_result["error"])
+                    continue
+                
+                if analysis_result["report_path"]:
+                    # 上传到云存储并保存记录（异步操作，在主线程中执行）
+                    cloud_url = await self._upload_report_to_cloud_and_save_record(
+                        advisor_id=advisor_id,
+                        advisor_name=stats.advisor_name,
+                        report_date=target_date,
+                        local_file_path=analysis_result["report_path"],
+                        report_content=analysis_result["analysis_content"],
+                        daily_metrics=daily_metrics
+                    )
+                    
+                    if cloud_url:
+                        results[advisor_id] = cloud_url
+                        logger.info("成功生成并上传顾问 %s 分析报告: %s", advisor_id, cloud_url)
+                    else:
+                        results[advisor_id] = analysis_result["report_path"]
+                        logger.warning("顾问 %s 报告生成成功但上传失败，保留本地文件: %s", advisor_id, analysis_result["report_path"])
+                else:
+                    logger.error("顾问 %s 报告生成失败", advisor_id)
+            
+            logger.info("完成所有顾问分析报告生成，成功: %d 个", len(results))
+            return results
+            
+        except Exception as e:
+            logger.error("生成顾问分析报告失败: %s", e)
+            return {}
+
+    def _analyze_and_save_consultant_data(
+        self, 
+        consultant_name: str, 
+        report_date: str, 
+        adviser_data: Dict[str, Any], 
+        daily_metrics: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        在线程池中执行同步的分析和保存操作
+        
+        Args:
+            consultant_name: 顾问姓名
+            report_date: 报告日期
+            adviser_data: 顾问数据
+            daily_metrics: 日度指标
+            
+        Returns:
+            Dict[str, Any]: 包含分析内容、报告路径和错误信息的字典
+        """
+        try:
+            # 调用分析函数
+            analysis_content, error = analyze_consultant_data(
+                consultant_name=consultant_name,
+                report_date=report_date,
+                adviser_data=adviser_data,
+                daily_metrics=daily_metrics
+            )
+            
+            if error:
+                return {"error": error, "analysis_content": None, "report_path": None}
+            
+            # 保存分析报告
+            report_path = save_consultant_analysis(
+                consultant_name=consultant_name,
+                analysis_content=analysis_content,
+                report_date=report_date
+            )
+            
+            return {
+                "error": None,
+                "analysis_content": analysis_content,
+                "report_path": report_path
+            }
+            
+        except Exception as e:
+            logger.error("线程中执行顾问数据分析失败: %s", str(e))
+            return {"error": str(e), "analysis_content": None, "report_path": None}
+
+
     async def generate_advisor_analysis_report(
         self, 
         _: Event | None = None,
@@ -559,7 +738,7 @@ class Aiboxservice(BaseService):
             existing_report = await self._get_existing_report(advisor_id, report_date)
 
             data = {
-                        "to_wxid": "wxid_demhpxriofpd22",
+                        "to_wxid": "50251377407@chatroom",
                         "msg": {
                             "text": "",
                             "xml": "",
