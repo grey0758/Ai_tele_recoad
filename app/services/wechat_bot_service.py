@@ -30,7 +30,7 @@ class WechatBotService(BaseService):
         await self._register_listener(EventType.SEND_WECHAT_MESSAGE, self.handle_send_wechat_message, priority=EventPriority.HIGH)
 
     async def send_wechat_message(
-        self, to_wxid: str, message: str
+        self, data: dict
     ) -> str:
         """
         发送微信消息
@@ -49,14 +49,6 @@ class WechatBotService(BaseService):
         # 将token放到params字段中
         params = {"token": settings.wechat_bot_token}
 
-        data = {
-            "to_wxid": to_wxid,
-            "msg": {"text": message, "xml": "", "url": "", "name": "", "url_thumb": ""},
-            "to_ren": "",
-            "msg_type": 1,
-            "send_type": 1,
-        }
-
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.post(
@@ -64,7 +56,7 @@ class WechatBotService(BaseService):
                 )
 
                 if response.status_code == 200:
-                    message = f"微信消息发送成功: to_wxid={to_wxid}"
+                    message = f"微信消息发送成功: to_wxid={data.get('to_wxid')}"
                     logger.info(message)
                     return message
                 else:
@@ -73,7 +65,7 @@ class WechatBotService(BaseService):
                     raise ExternalRequestException(error_message)
 
         except Exception as e:  # pylint: disable=broad-except
-            error_message = f"微信消息发送异常: to_wxid={to_wxid}, error={str(e)}"
+            error_message = f"微信消息发送异常: to_wxid={data.get('to_wxid')}, error={str(e)}"
             logger.error(error_message)
             raise ExternalRequestException(error_message) from e
 
@@ -86,15 +78,8 @@ class WechatBotService(BaseService):
                 return error_msg
                 
             data = event.data
-            to_wxid = data.get("to_wxid")
-            message = data.get("message")
             
-            if not to_wxid or not message:
-                error_msg = "微信消息发送事件数据不完整"
-                logger.error(error_msg)
-                return error_msg
-            
-            result = await self.send_wechat_message(to_wxid, message)
+            result = await self.send_wechat_message(data)
             logger.info("微信消息发送事件处理成功: %s", result)
             return result
             

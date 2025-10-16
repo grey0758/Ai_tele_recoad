@@ -4,6 +4,7 @@ aiBox 服务层
 提供顾问通话时长统计相关的业务逻辑处理
 """
 
+import os
 from typing import Optional, Dict, Any
 from datetime import date, datetime
 from sqlalchemy import select, and_, func
@@ -17,11 +18,14 @@ from app.models.advisor_call_duration_stats import (
     AdvisorDeviceConfig,
 )
 from app.models.advisors import Advisors
+from app.models.advisor_analysis_report import AdvisorAnalysisReport
 from app.schemas.advisor_call_duration_stats import (
     AdvisorCallDurationStatsUpdateRequestWithDeviceIdAndStatsDate,
 )
+from app.schemas.advisor_analysis_report import AdvisorAnalysisReportCreate, AdvisorAnalysisReportUpdate
 from app.models.events import EventPriority
 from app.core.logger import get_logger
+from app.services.cloud_service import CloudService
 from app.utils.advisor_recording_report import analyze_consultant_data, save_consultant_analysis
 from app.services.call_records_service import CallRecordsService
 
@@ -36,13 +40,15 @@ class Aiboxservice(BaseService):
         self.database = database
         self.call_records_service = call_records_service
         self.event_bus = event_bus
+        self.cloud_service = CloudService()
 
     async def initialize(self) -> bool:
         return True
 
     async def register_event_listeners(self):
         """注册事件监听器"""
-        await self._register_listener(EventType.SEND_ADVISOR_STATS_WECHAT_REPORT_TASK, self.send_advisor_stats_wechat_report_task, priority=EventPriority.HIGH)
+        await self._register_listener(EventType.SEND_ADVISOR_STATS_WECHAT_REPORT_TASK, self.send_advisor_stats_wechat_report_task, priority=EventPriority.HIGH, timeout=30.0)
+        await self._register_listener(EventType.GENERATE_ADVISOR_ANALYSIS_REPORT_TASK, self.generate_advisor_analysis_report, priority=EventPriority.HIGH, timeout=1000.0)
 
     async def upsert_advisor_call_duration_stats(
         self, stats_data: AdvisorCallDurationStatsUpdateRequestWithDeviceIdAndStatsDate
@@ -272,7 +278,10 @@ class Aiboxservice(BaseService):
             EventType.SEND_WECHAT_MESSAGE,
             data={
                 "to_wxid": "58065692621@chatroom",
-                "message": msg
+                "msg": {"text": msg, "xml": "", "url": "", "name": "", "url_thumb": ""},
+                "to_ren": "",
+                "msg_type": 1,
+                "send_type": 1,
             },
             wait_for_result=False
         )
@@ -389,6 +398,7 @@ class Aiboxservice(BaseService):
 
     async def generate_advisor_analysis_report(
         self, 
+        _: Event | None = None,
         target_date: Optional[date] = None
     ) -> Dict[int, str]:
         """
@@ -483,8 +493,24 @@ class Aiboxservice(BaseService):
                     report_date=target_date.strftime("%Y-%m-%d")
                 )
                 
-                results[advisor_id] = report_path
-                logger.info("成功生成顾问 %s 分析报告: %s", advisor_id, report_path)
+                if report_path:
+                    cloud_url = await self._upload_report_to_cloud_and_save_record(
+                        advisor_id=advisor_id,
+                        advisor_name=stats.advisor_name,
+                        report_date=target_date,
+                        local_file_path=report_path,
+                        report_content=analysis_content,
+                        daily_metrics=daily_metrics
+                    )
+                    
+                    if cloud_url:
+                        results[advisor_id] = cloud_url
+                        logger.info("成功生成并上传顾问 %s 分析报告: %s", advisor_id, cloud_url)
+                    else:
+                        results[advisor_id] = report_path
+                        logger.warning("顾问 %s 报告生成成功但上传失败，保留本地文件: %s", advisor_id, report_path)
+                else:
+                    logger.error("顾问 %s 报告生成失败", advisor_id)
             
             logger.info("完成所有顾问分析报告生成，成功: %d 个", len(results))
             return results
@@ -492,3 +518,164 @@ class Aiboxservice(BaseService):
         except Exception as e:
             logger.error("生成顾问分析报告失败: %s", e)
             return {}
+
+    async def _upload_report_to_cloud_and_save_record(
+        self, 
+        advisor_id: int, 
+        advisor_name: str, 
+        report_date: date, 
+        local_file_path: str,
+        report_content: str,
+        daily_metrics: Dict[str, Any]
+    ) -> Optional[str]:
+        """
+        上传报告到云存储并保存数据库记录
+        
+        Args:
+            advisor_id: 顾问ID
+            advisor_name: 顾问姓名
+            report_date: 报告日期
+            local_file_path: 本地文件路径
+            report_content: 报告内容
+            daily_metrics: 日度指标
+            
+        Returns:
+            str: 云存储URL，失败时返回None
+        """
+        try:
+            # 1. 上传到云存储
+            cloud_path = f"advisor_reports/{report_date.strftime('%Y/%m/%d')}"
+            
+            upload_result = await self.cloud_service.upload_file_from_path(
+                file_path=local_file_path,
+                path=cloud_path
+            )
+            
+            if not upload_result.success:
+                logger.error("上传文件到云存储失败: %s", upload_result.error)
+                return None
+            
+            # 2. 检查是否已存在今天的记录
+            existing_report = await self._get_existing_report(advisor_id, report_date)
+
+            data = {
+                        "to_wxid": "wxid_demhpxriofpd22",
+                        "msg": {
+                            "text": "",
+                            "xml": "",
+                            "url": f"{upload_result.url}",
+                            "name": f"{upload_result.object_key}",
+                            "url_thumb": ""
+                        },
+                        "to_ren": "",
+                        "msg_type": 6,
+                        "send_type": 1
+                    }
+            
+            await self.emit_event(EventType.SEND_WECHAT_MESSAGE,data=data,wait_for_result=False)
+            
+            if existing_report:
+                # 更新现有记录
+                update_data = AdvisorAnalysisReportUpdate(
+                    cloud_url=upload_result.url,
+                    cloud_object_key=upload_result.object_key,
+                    is_uploaded=True,
+                    is_deleted=False
+                )
+                success = await self._update_report_record(int(existing_report.id), update_data)
+                if success:
+                    logger.info("更新顾问 %s 的报告记录，云URL: %s", advisor_name, upload_result.url)
+                else:
+                    logger.error("更新顾问 %s 的报告记录失败", advisor_name)
+            else:
+                # 创建新记录
+                report_data = AdvisorAnalysisReportCreate(
+                    advisor_id=advisor_id,
+                    advisor_name=advisor_name,
+                    report_date=report_date,
+                    report_type="daily",
+                    local_file_path=local_file_path,
+                    cloud_url=upload_result.url,
+                    cloud_object_key=upload_result.object_key,
+                    report_content=report_content,
+                    report_summary=f"{advisor_name}的{report_date}日度分析报告",
+                    total_calls=daily_metrics.get("call_count", 0),
+                    connected_calls=daily_metrics.get("connected_calls", 0),
+                    connection_rate=daily_metrics.get("connection_rate", "0%"),
+                    effective_calls=daily_metrics.get("effective_calls", 0),
+                    effective_call_rate=daily_metrics.get("effective_call_rate", "0%"),
+                    total_duration_minutes=daily_metrics.get("total_effective_duration_minutes", "0"),
+                    is_uploaded=True,
+                    is_deleted=False
+                )
+                report = await self._create_report_record(report_data)
+                if report:
+                    logger.info("创建顾问 %s 的报告记录，云URL: %s", advisor_name, upload_result.url)
+                else:
+                    logger.error("创建顾问 %s 的报告记录失败", advisor_name)
+            
+            # 3. 删除本地文件
+            if os.path.exists(local_file_path):
+                os.remove(local_file_path)
+                logger.info("已删除本地文件: %s", local_file_path)
+            
+            return upload_result.url
+            
+        except Exception as e:
+            logger.error("处理报告上传和保存失败: %s", e)
+            return None
+
+    async def _get_existing_report(self, advisor_id: int, report_date: date) -> Optional[AdvisorAnalysisReport]:
+        """获取现有的报告记录"""
+        async with self.database.get_session() as db_session:
+            try:
+                result = await db_session.execute(
+                    select(AdvisorAnalysisReport).where(
+                        and_(
+                            AdvisorAnalysisReport.advisor_id == advisor_id,
+                            AdvisorAnalysisReport.report_date == report_date
+                        )
+                    )
+                )
+                return result.scalar_one_or_none()
+            except Exception as e:
+                logger.error("查询现有报告记录失败: %s", e)
+                return None
+
+    async def _create_report_record(self, report_data: AdvisorAnalysisReportCreate) -> Optional[AdvisorAnalysisReport]:
+        """创建报告记录"""
+        async with self.database.get_session() as db_session:
+            try:
+                report = AdvisorAnalysisReport(**report_data.model_dump())
+                db_session.add(report)
+                await db_session.commit()
+                await db_session.refresh(report)
+                return report
+            except Exception as e:
+                logger.error("创建报告记录失败: %s", e)
+                await db_session.rollback()
+                return None
+
+    async def _update_report_record(self, report_id: int, update_data: AdvisorAnalysisReportUpdate) -> bool:
+        """更新报告记录"""
+        async with self.database.get_session() as db_session:
+            try:
+                result = await db_session.execute(
+                    select(AdvisorAnalysisReport).where(AdvisorAnalysisReport.id == report_id)
+                )
+                report = result.scalar_one_or_none()
+                
+                if not report:
+                    logger.error("报告记录不存在: %s", report_id)
+                    return False
+                
+                # 更新字段
+                for field, value in update_data.model_dump(exclude_unset=True).items():
+                    setattr(report, field, value)
+                
+                await db_session.commit()
+                return True
+            except Exception as e:
+                logger.error("更新报告记录失败: %s", e)
+                await db_session.rollback()
+                return False

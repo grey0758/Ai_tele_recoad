@@ -720,12 +720,24 @@ class CallRecordsService(BaseService):
                 "autodialect"
             )
             
-            if transcription_result and not transcription_result.startswith("转写失败") and not transcription_result.startswith("上传失败"):
-                logger.info("转录成功 | record_id=%s, content_length=%s", record.id, len(transcription_result))
-                return record.id, transcription_result
+            # 处理转录结果（现在是字典格式）
+            if isinstance(transcription_result, dict):
+                if transcription_result.get("success") and transcription_result.get("text"):
+                    text = transcription_result.get("text", "")
+                    logger.info("转录成功 | record_id=%s, content_length=%s", record.id, len(text))
+                    return record.id, text
+                else:
+                    error_msg = transcription_result.get("error", "未知错误")
+                    logger.warning("转录失败 | record_id=%s, error=%s", record.id, error_msg)
+                    return record.id, ""
             else:
-                logger.warning("转录失败 | record_id=%s, error=%s", record.id, transcription_result)
-                return record.id, ""
+                # 兼容旧的字符串格式
+                if transcription_result and not transcription_result.startswith("转写失败") and not transcription_result.startswith("上传失败"):
+                    logger.info("转录成功 | record_id=%s, content_length=%s", record.id, len(transcription_result))
+                    return record.id, transcription_result
+                else:
+                    logger.warning("转录失败 | record_id=%s, error=%s", record.id, transcription_result)
+                    return record.id, ""
                 
         except Exception as e:
             logger.error("转录过程中发生错误 | record_id=%s, error=%s", record.id, str(e))

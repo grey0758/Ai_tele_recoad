@@ -4,7 +4,7 @@
 提供顾问通话时长统计相关的 REST API 接口
 """
 
-from typing import List
+from typing import List, Optional
 from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, Query, Path
 
@@ -169,6 +169,42 @@ async def trigger_advisor_stats_wechat_report(
             max_retries=0,
         )
     return ResponseBuilder.success(None, message)
+
+
+@router.post(
+    "/generate-advisor-analysis-report",
+    response_model=ResponseData[dict],
+    summary="手动触发顾问分析报告生成任务",
+)
+async def trigger_generate_advisor_analysis_report(
+    target_date: Optional[str] = None,
+    aibox_service: Aiboxservice = Depends(get_aibox_service),
+):
+    """
+    手动触发顾问分析报告生成任务
+
+    Args:
+        target_date: 目标日期，格式为 YYYY-MM-DD，默认为今天
+    """
+    try:
+        # 准备事件数据
+        event_data = {}
+        if target_date:
+            event_data["target_date"] = target_date
+        
+        # 触发事件
+        message = await aibox_service.emit_event(
+            EventType.GENERATE_ADVISOR_ANALYSIS_REPORT_TASK,
+            data=event_data if event_data else None,
+            wait_for_result=True,
+            max_retries=0,
+        )
+        
+        return ResponseBuilder.success({"message": message}, "顾问分析报告生成任务已触发")
+        
+    except Exception as e:
+        logger.error("触发顾问分析报告生成任务失败: %s", e)
+        return ResponseBuilder.error(f"触发任务失败: {str(e)}", ResponseCode.INTERNAL_ERROR)
 
 
 @router.get(

@@ -77,7 +77,7 @@ class EnhancedServiceContainer:
         self._services["call_records_service"] = CallRecordsService(self._event_bus, self._services["db_service"], self._services["redis_service"])
         self._services["file_service"] = FileService(self._event_bus)
         self._services["lead_service"] = LeadService(self._event_bus, self._services["db_service"])
-        self._services["aibox_service"] = Aiboxservice(self._event_bus, self._services["db_service"])
+        self._services["aibox_service"] = Aiboxservice(self._event_bus, self._services["db_service"], self._services["call_records_service"])
         self._services["ai_tele_status_service"] = AiTeleStatusService(self._event_bus, self._services["db_service"])
         self._services["wechat_bot_service"] = WechatBotService(self._event_bus)
         self._services["scheduled_tasks_service"] = ScheduledTasksService(self._event_bus, self._services["db_service"])

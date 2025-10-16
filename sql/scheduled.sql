@@ -26,7 +26,7 @@ CREATE TABLE task_execution_logs (
     FOREIGN KEY (task_id) REFERENCES scheduled_tasks(id)
 );
 
--- 插入单个定时任务配置（中午暂停）
+-- 插入定时任务配置
 INSERT INTO scheduled_tasks (
     task_name, 
     task_type, 
@@ -36,7 +36,7 @@ INSERT INTO scheduled_tasks (
     interval_minutes,
     description
 ) VALUES 
-('hourly_task_with_break', 'data_sync', '59 8-12,14-17 * * *', '08:59:00', '17:59:00', 60, '每小时执行任务，中午13点暂停');
+('advisor_call_duration_stats_task', 'data_sync', '*/5 * * * *', '08:59:00', '21:59:00', 60, '每小时执行任务，中午12点暂停');
 INSERT INTO scheduled_tasks (
     task_name, 
     task_type, 
@@ -46,4 +46,14 @@ INSERT INTO scheduled_tasks (
     interval_minutes,
     description
 ) VALUES 
-('data_sync_service', 'data_sync', '1 9-12,14-18 * * *', '09:01:00', '18:01:00', 60, '数据同步服务，在59分任务执行后的下个小时01分执行，中午13点暂停');
+('send.advisor.stats.wechat.report.task', 'data_sync_service', '2 10-12,14-22 * * *', '09:01:00', '22:02:00', 60, '数据同步服务，在59分任务执行后的下个小时01分执行，中午13点暂停');
+INSERT INTO scheduled_tasks (
+    task_name, 
+    task_type, 
+    cron_expression, 
+    start_time, 
+    end_time, 
+    interval_minutes,
+    description
+) VALUES 
+('generate.advisor.analysis.report.task', 'data_sync_service', '0 6 * * *', '06:00:00', '06:00:00', 1440, '每天六点执行一次顾问分析报告生成任务');

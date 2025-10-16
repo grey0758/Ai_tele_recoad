@@ -152,15 +152,14 @@ class AiTeleStatusService(BaseService):
             msg = "\n".join(msg_lines)
             logger.info("生成的AI顾问微信播报消息:\n%s", msg)
             
-            # 通过事件发送微信消息，不等待结果
-            await self.emit_event(
-                EventType.SEND_WECHAT_MESSAGE,
-                data={
-                    "to_wxid": "50251377407@chatroom",
-                    "message": msg
-                },
-                wait_for_result=False
-            )
+            data = {
+            "to_wxid": "50251377407@chatroom",
+            "msg": {"text": msg, "xml": "", "url": "", "name": "", "url_thumb": ""},
+            "to_ren": "",
+            "msg_type": 1,
+            "send_type": 1,
+            }
+            await self.emit_event(EventType.SEND_WECHAT_MESSAGE,data=data,wait_for_result=False)
             
             return "AI顾问微信播报事件已发送"
             

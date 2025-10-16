@@ -19,6 +19,7 @@ class EventType(Enum):
     SEND_AI_ADVISOR_STATS_WECHAT_REPORT_TASK = "send.ai.advisor.stats.wechat.report.task"
     SEND_WECHAT_MESSAGE = "send.wechat.message"
     CALL_RECORDS_SAVE_AUTO_UPLOAD = "call_records.save_auto_upload"
+    GENERATE_ADVISOR_ANALYSIS_REPORT_TASK = "generate.advisor.analysis.report.task"
 
 class EventPriority(Enum):
     """事件优先级"""
